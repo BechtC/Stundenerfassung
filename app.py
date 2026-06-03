@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime, date, timedelta
 import database as db
 from rechnung_pdf import rechnung_als_pdf
+from kalkulator import stundensatz_berechnen, auf_naechste_runden
 
 # --- Init ---
 db.init_db()
@@ -410,9 +411,34 @@ elif seite == "Projekte":
 
     with col1:
         st.subheader("Neues Projekt")
+
+        with st.expander("Stundensatz berechnen"):
+            k_netto = st.number_input("Wunsch-Nettoeinkommen (EUR/Monat)", min_value=0.0,
+                                      value=3000.0, step=100.0, key="k_netto")
+            k_tage = st.number_input("Arbeitstage pro Monat", min_value=1, max_value=31,
+                                     value=20, step=1, key="k_tage")
+            k_nfh = st.number_input("Nicht-fakturierbare Stunden/Tag", min_value=0.0,
+                                    max_value=7.5, value=1.0, step=0.5, key="k_nfh")
+            k_puffer = st.number_input("Ausfallpuffer (%)", min_value=0, max_value=99,
+                                       value=20, step=5, key="k_puffer")
+            k_rund = st.selectbox("Rundung", [1, 5, 10], index=1, key="k_rund",
+                                  format_func=lambda x: f"auf {x} EUR")
+            if st.button("Berechnen", key="k_berechnen"):
+                try:
+                    roh = stundensatz_berechnen(k_netto, k_tage, k_nfh, k_puffer)
+                    gerundet = auf_naechste_runden(roh, k_rund)
+                    st.info(f"Rohwert: **{roh:.2f} EUR/h** → Gerundet: **{gerundet} EUR/h**")
+                    if st.button(f"Stundensatz {gerundet} EUR übernehmen", key="k_uebernehmen"):
+                        st.session_state["k_vorschlag"] = float(gerundet)
+                        st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
         with st.form("neues_projekt"):
             p_name = st.text_input("Projektname")
-            p_satz = st.number_input("Stundensatz (EUR)", min_value=0.0, value=80.0, step=5.0)
+            p_satz_default = st.session_state.pop("k_vorschlag", 80.0)
+            p_satz = st.number_input("Stundensatz (EUR)", min_value=0.0,
+                                     value=p_satz_default, step=5.0)
             p_kunde = st.text_input("Kunde")
             p_adresse = st.text_area("Kundenadresse", height=80)
             submitted = st.form_submit_button("Projekt anlegen", type="primary")
