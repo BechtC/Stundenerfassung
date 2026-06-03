@@ -14,6 +14,24 @@ from rechnung_pdf import rechnung_als_pdf
 # --- Init ---
 db.init_db()
 
+# --- Timer Session State aus DB wiederherstellen (Reload-Resistenz) ---
+if "timer_aktiv" not in st.session_state:
+    laufender = db.laufenden_timer_laden()
+    if laufender:
+        st.session_state.timer_aktiv = True
+        st.session_state.timer_eintrag_id = laufender["id"]
+        st.session_state.timer_stundensatz = laufender["stundensatz"]
+        st.session_state.timer_startzeit = laufender["startzeit"]
+        st.session_state.timer_projekt_name = laufender["projekt_name"]
+        st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
+        st.session_state.timer_beschreibung = laufender.get("beschreibung", "")
+        st.session_state.timer_kategorie = laufender.get("kategorie", "Produktiv")
+    else:
+        st.session_state.timer_aktiv = False
+
+if "stopp_dialog_offen" not in st.session_state:
+    st.session_state.stopp_dialog_offen = False
+
 st.set_page_config(
     page_title="Stundenerfassung",
     page_icon="⏱️",
@@ -40,6 +58,154 @@ seite = st.sidebar.radio("Navigation", [
     "Rechnungen",
     "Einstellungen",
 ])
+
+# --- Live-Tracker Sidebar ---
+st.sidebar.divider()
+
+if st.session_state.timer_aktiv:
+    # --- Aktiver Timer: JS-Uhr + Stopp-Button ---
+    startzeit_iso = st.session_state.timer_startzeit
+    projekt_label = st.session_state.timer_projekt_name
+    if st.session_state.timer_unterthema_name:
+        projekt_label += f" › {st.session_state.timer_unterthema_name}"
+    from datetime import datetime as dt
+    startzeit_anzeige = dt.fromisoformat(startzeit_iso).strftime("%H:%M")
+
+    st.sidebar.markdown(f"**⏱ {projekt_label}**")
+    st.sidebar.caption(f"Gestartet: {startzeit_anzeige}")
+
+    import streamlit.components.v1 as components
+    components.html(f"""
+        <div id="timer" style="font-size:2em; font-family:monospace; color:#e0e0e0;
+             text-align:center; padding:8px 0;">00:00:00</div>
+        <script>
+          const start = new Date("{startzeit_iso}");
+          function tick() {{
+            const diff = Math.floor((new Date() - start) / 1000);
+            const h = String(Math.floor(diff/3600)).padStart(2,'0');
+            const m = String(Math.floor((diff%3600)/60)).padStart(2,'0');
+            const s = String(diff%60).padStart(2,'0');
+            document.getElementById('timer').textContent = h+':'+m+':'+s;
+          }}
+          tick();
+          setInterval(tick, 1000);
+        </script>
+    """, height=60)
+
+    if st.sidebar.button("⏹ Stoppen", type="primary", use_container_width=True):
+        st.session_state.stopp_dialog_offen = True
+        st.rerun()
+
+else:
+    # --- Kein aktiver Timer: Recently Used + Neuer Timer ---
+    recently = db.recently_used_laden()
+
+    if recently:
+        st.sidebar.markdown("**Zuletzt verwendet:**")
+        for r in recently:
+            label = f"▶ {r['projekt_name']}"
+            if r.get("unterthema_name"):
+                label += f" › {r['unterthema_name']}"
+            if st.sidebar.button(label, key=f"recent_{r['projekt_id']}_{r['unterthema_id']}",
+                                  use_container_width=True):
+                projekte = db.projekte_laden()
+                projekt = next((p for p in projekte if p["id"] == r["projekt_id"]), None)
+                stundensatz = projekt["stundensatz"] if projekt else 0.0
+                eid = db.timer_starten(
+                    projekt_id=r["projekt_id"],
+                    unterthema_id=r["unterthema_id"],
+                    kategorie=r.get("kategorie", "Produktiv"),
+                    beschreibung="",
+                    stundensatz=stundensatz,
+                )
+                st.session_state.timer_aktiv = True
+                st.session_state.timer_eintrag_id = eid
+                st.session_state.timer_stundensatz = stundensatz
+                laufender = db.laufenden_timer_laden()
+                st.session_state.timer_startzeit = laufender["startzeit"]
+                st.session_state.timer_projekt_name = laufender["projekt_name"]
+                st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
+                st.session_state.timer_beschreibung = ""
+                st.session_state.timer_kategorie = r.get("kategorie", "Produktiv")
+                st.rerun()
+
+    st.sidebar.markdown("**Neuer Timer:**")
+    projekte = db.projekte_laden()
+    if not projekte:
+        st.sidebar.caption("Bitte erst ein Projekt anlegen.")
+    else:
+        projekt_namen = {p["name"]: p for p in projekte}
+        gew_projekt_name = st.sidebar.selectbox("Projekt", list(projekt_namen.keys()),
+                                                 key="timer_projekt_select")
+        gew_projekt = projekt_namen[gew_projekt_name]
+
+        unterthemen = db.unterthemen_laden(gew_projekt["id"])
+        ut_namen = {"(Kein Unterthema)": None}
+        ut_namen.update({u["name"]: u["id"] for u in unterthemen})
+        gew_ut = st.sidebar.selectbox("Unterthema", list(ut_namen.keys()),
+                                       key="timer_ut_select")
+        ut_id = ut_namen[gew_ut]
+
+        timer_kat = st.sidebar.selectbox("Kategorie", db.KATEGORIEN, key="timer_kat_select")
+        timer_kommentar = st.sidebar.text_input("Kommentar", key="timer_kommentar")
+
+        # Multi-Tab-Schutz
+        laufender = db.laufenden_timer_laden()
+        if laufender:
+            st.sidebar.warning(f"Bereits läuft: {laufender['projekt_name']}")
+        elif st.sidebar.button("▶ Starten", type="primary", use_container_width=True):
+            eid = db.timer_starten(
+                projekt_id=gew_projekt["id"],
+                unterthema_id=ut_id,
+                kategorie=timer_kat,
+                beschreibung=timer_kommentar,
+                stundensatz=gew_projekt["stundensatz"],
+            )
+            st.session_state.timer_aktiv = True
+            st.session_state.timer_eintrag_id = eid
+            st.session_state.timer_stundensatz = gew_projekt["stundensatz"]
+            laufender = db.laufenden_timer_laden()
+            st.session_state.timer_startzeit = laufender["startzeit"]
+            st.session_state.timer_projekt_name = laufender["projekt_name"]
+            st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
+            st.session_state.timer_beschreibung = timer_kommentar
+            st.session_state.timer_kategorie = timer_kat
+            st.rerun()
+
+# --- Stopp-Dialog ---
+@st.dialog("Timer stoppen")
+def stopp_dialog():
+    from datetime import datetime as dt
+    startzeit = dt.fromisoformat(st.session_state.timer_startzeit)
+    jetzt = dt.now()
+    diff_sek = int((jetzt - startzeit).total_seconds())
+    stunden_dezimal = round(diff_sek / 3600, 2)
+    minuten = diff_sek // 60
+    h, m = divmod(minuten, 60)
+
+    st.write(f"**Projekt:** {st.session_state.timer_projekt_name}" +
+             (f" › {st.session_state.timer_unterthema_name}"
+              if st.session_state.timer_unterthema_name else ""))
+    st.write(f"**Dauer:** {h}h {m}min → {stunden_dezimal}h")
+
+    kat = st.selectbox("Kategorie", db.KATEGORIEN,
+                       index=db.KATEGORIEN.index(st.session_state.timer_kategorie)
+                       if st.session_state.timer_kategorie in db.KATEGORIEN else 0)
+    kommentar = st.text_area("Kommentar", value=st.session_state.timer_beschreibung, height=80)
+
+    c1, c2 = st.columns(2)
+    if c1.button("Speichern", type="primary", use_container_width=True):
+        db.timer_stoppen(st.session_state.timer_eintrag_id, beschreibung=kommentar)
+        db.zeiteintrag_aktualisieren(st.session_state.timer_eintrag_id, kategorie=kat)
+        st.session_state.timer_aktiv = False
+        st.session_state.stopp_dialog_offen = False
+        st.rerun()
+    if c2.button("Abbrechen", use_container_width=True):
+        st.session_state.stopp_dialog_offen = False
+        st.rerun()
+
+if st.session_state.stopp_dialog_offen:
+    stopp_dialog()
 
 # ============================================================
 # ZEITERFASSUNG
