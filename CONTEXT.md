@@ -65,10 +65,22 @@ Commit + Push    → git commit + git push nach jedem abgeschlossenen Issue
 Issues schließen → via GitHub MCP oder manuell auf github.com
 ```
 
-**Wichtige Skills:**
-- `/grill-me` — Anforderungen ausarbeiten
-- `/grill-with-docs` — wie grill-me, aber pflegt zusätzlich CONTEXT.md und ADRs
-- `/to-issues` — Plan in GitHub Issues umwandeln
-- `/tdd` — Test-Driven Development
-- `/diagnose` — strukturiertes Debugging
-- `/improve-codebase-architecture` — Codequalität verbessern (regelmäßig laufen lassen)
+**Skill-Entscheidungsbaum:**
+
+```
+Neue Anforderung?          → /grill-me → Spec → /to-issues → /tdd
+Konversation als Issue?    → /to-prd
+Code verstehen/einsteigen? → /zoom-out  (auch ohne Vorwissen/Historie)
+Bug debuggen?              → /diagnose
+Code verbessern?           → /improve-codebase-architecture  (regelmäßig)
+```
+
+**Skill-Referenz:**
+- `/grill-me` — Anforderungen Frage für Frage ausarbeiten
+- `/grill-with-docs` — wie grill-me, pflegt zusätzlich CONTEXT.md und ADRs
+- `/to-prd` — laufende Konversation als GitHub Issue festhalten
+- `/to-issues` — Spec/PRD in vertikale GitHub Issues aufbrechen
+- `/tdd` — Test-Driven Development (Red → Green → Refactor)
+- `/zoom-out` — Code im Systemkontext erklären, ideal beim Einstieg ohne Historie
+- `/diagnose` — strukturiertes Debugging (reproduce → minimise → fix → test)
+- `/improve-codebase-architecture` — Codequalität und Modultiefe verbessern
