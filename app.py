@@ -23,6 +23,7 @@ if "timer_aktiv" not in st.session_state:
         st.session_state.timer_stundensatz = laufender["stundensatz"]
         st.session_state.timer_startzeit = laufender["startzeit"]
         st.session_state.timer_projekt_name = laufender["projekt_name"]
+        st.session_state.timer_projekt_farbe = laufender.get("projekt_farbe", "#AAAAAA")
         st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
         st.session_state.timer_beschreibung = laufender.get("beschreibung", "")
         st.session_state.timer_kategorie = laufender.get("kategorie", "Produktiv")
@@ -71,7 +72,11 @@ if st.session_state.timer_aktiv:
     from datetime import datetime as dt
     startzeit_anzeige = dt.fromisoformat(startzeit_iso).strftime("%H:%M")
 
-    st.sidebar.markdown(f"**⏱ {projekt_label}**")
+    timer_farbe = st.session_state.get("timer_projekt_farbe", "#AAAAAA") or "#AAAAAA"
+    st.sidebar.markdown(
+        f'<span style="color:{timer_farbe}">●</span> **⏱ {projekt_label}**',
+        unsafe_allow_html=True
+    )
     st.sidebar.caption(f"Gestartet: {startzeit_anzeige}")
 
     import streamlit.components.v1 as components
@@ -124,6 +129,7 @@ else:
                 laufender = db.laufenden_timer_laden()
                 st.session_state.timer_startzeit = laufender["startzeit"]
                 st.session_state.timer_projekt_name = laufender["projekt_name"]
+                st.session_state.timer_projekt_farbe = laufender.get("projekt_farbe", "#AAAAAA")
                 st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
                 st.session_state.timer_beschreibung = ""
                 st.session_state.timer_kategorie = r.get("kategorie", "Produktiv")
@@ -167,6 +173,7 @@ else:
             laufender = db.laufenden_timer_laden()
             st.session_state.timer_startzeit = laufender["startzeit"]
             st.session_state.timer_projekt_name = laufender["projekt_name"]
+            st.session_state.timer_projekt_farbe = laufender.get("projekt_farbe", "#AAAAAA")
             st.session_state.timer_unterthema_name = laufender.get("unterthema_name")
             st.session_state.timer_beschreibung = timer_kommentar
             st.session_state.timer_kategorie = timer_kat
@@ -265,8 +272,11 @@ if seite == "Zeiterfassung":
             for e in eintraege:
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-                    c1.write(f"**{e['projekt_name']}**" +
-                             (f" > {e['unterthema_name']}" if e.get("unterthema_name") else ""))
+                    pfarbe = e.get("projekt_farbe") or "#AAAAAA"
+                    pname = f'<span style="color:{pfarbe}">●</span> **{e["projekt_name"]}**'
+                    if e.get("unterthema_name"):
+                        pname += f' › {e["unterthema_name"]}'
+                    c1.markdown(pname, unsafe_allow_html=True)
                     c2.write(e.get("beschreibung", ""))
                     c3.write(f"{e['stunden']:.2f}h")
                     if c4.button("X", key=f"del_{e['id']}"):
@@ -380,7 +390,16 @@ elif seite == "Projekte":
         projekte = db.projekte_laden(nur_aktive=False)
 
         for p in projekte:
+            farbe = p.get("farbe", "#AAAAAA") or "#AAAAAA"
+            punkt = f'<span style="color:{farbe}">●</span>'
             with st.expander(f"{'✅' if p['aktiv'] else '❌'} {p['name']} — {p['stundensatz']:.2f} EUR/h"):
+                # Farbpicker
+                neue_farbe = st.color_picker("Projektfarbe", value=farbe, key=f"farbe_{p['id']}")
+                if neue_farbe != farbe:
+                    db.projekt_farbe_aktualisieren(p["id"], neue_farbe)
+                    st.rerun()
+                st.markdown(f"{punkt} Vorschau Farbpunkt", unsafe_allow_html=True)
+                st.divider()
                 # Unterthemen
                 unterthemen = db.unterthemen_laden(p["id"], nur_aktive=False)
                 if unterthemen:

@@ -207,7 +207,7 @@ def zeiteintrag_erstellen(datum, projekt_id, stunden, unterthema_id=None,
 
 def zeiteintraege_laden(datum_von=None, datum_bis=None, projekt_id=None):
     query = """
-        SELECT z.*, p.name as projekt_name, u.name as unterthema_name, p.stundensatz
+        SELECT z.*, p.name as projekt_name, u.name as unterthema_name, p.stundensatz, p.farbe as projekt_farbe
         FROM zeiteintraege z
         JOIN projekte p ON z.projekt_id = p.id
         LEFT JOIN unterthemen u ON z.unterthema_id = u.id
@@ -275,7 +275,7 @@ def recently_used_laden(limit=3):
 def laufenden_timer_laden():
     with get_connection() as conn:
         row = conn.execute("""
-            SELECT z.*, p.name as projekt_name, u.name as unterthema_name, p.stundensatz
+            SELECT z.*, p.name as projekt_name, u.name as unterthema_name, p.stundensatz, p.farbe as projekt_farbe
             FROM zeiteintraege z
             JOIN projekte p ON z.projekt_id = p.id
             LEFT JOIN unterthemen u ON z.unterthema_id = u.id
