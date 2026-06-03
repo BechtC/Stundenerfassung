@@ -34,6 +34,20 @@ python testdaten.py
 - Kategorien definiert in `database.KATEGORIEN`
 - `firmen_daten`-Tabelle ist Singleton (id=1, enforced via CHECK constraint)
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub at BechtC/Stundenerfassung (uses `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Standard five-label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at repo root + `docs/adr/`. Read `CONTEXT.md` before every session. See `docs/agents/domain.md`.
+
 # context-mode — MANDATORY routing rules
 
 You have context-mode MCP tools available. These rules are NOT optional — they protect your context window from flooding. A single unrouted command can dump 56 KB into context and waste the entire session.
