@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from datetime import datetime, date, timedelta
 import database as db
-from rechnung_pdf import rechnung_als_pdf
+from rechnung_pdf import rechnung_als_pdf, monatsexport_als_pdf
 from kalkulator import stundensatz_berechnen, auf_naechste_runden
 
 # --- Init ---
@@ -389,11 +389,23 @@ elif seite == "Dashboard":
             dateiname = f"stundenerfassung_{int(export_jahr)}-{int(export_monat):02d}"
             if export_projekt_id:
                 dateiname += f"_{gew_export_projekt.replace(' ', '_')}"
-            st.download_button(
+            dl_col1, dl_col2 = st.columns(2)
+            dl_col1.download_button(
                 label=f"CSV herunterladen ({len(export_daten)} Einträge)",
                 data=df_export.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
                 file_name=f"{dateiname}.csv",
                 mime="text/csv",
+            )
+            firma = db.firmendaten_laden()
+            pdf_bytes = monatsexport_als_pdf(
+                firma, int(export_jahr), int(export_monat), export_daten,
+                projekt_filter=gew_export_projekt if export_projekt_id else None
+            )
+            dl_col2.download_button(
+                label=f"PDF herunterladen ({len(export_daten)} Einträge)",
+                data=pdf_bytes,
+                file_name=f"{dateiname}.pdf",
+                mime="application/pdf",
             )
         else:
             st.info("Keine Einträge für diesen Monat/Projekt.")
