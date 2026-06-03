@@ -108,6 +108,7 @@ else:
     if recently:
         st.sidebar.markdown("**Zuletzt verwendet:**")
         for r in recently:
+            rfarbe = r.get("projekt_farbe") or "#AAAAAA"
             label = f"▶ {r['projekt_name']}"
             if r.get("unterthema_name"):
                 label += f" › {r['unterthema_name']}"

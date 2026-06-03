@@ -259,7 +259,7 @@ def timer_stoppen(eintrag_id, beschreibung):
 def recently_used_laden(limit=3):
     with get_connection() as conn:
         rows = conn.execute("""
-            SELECT z.projekt_id, p.name as projekt_name,
+            SELECT z.projekt_id, p.name as projekt_name, p.farbe as projekt_farbe,
                    z.unterthema_id, u.name as unterthema_name, z.kategorie
             FROM zeiteintraege z
             JOIN projekte p ON z.projekt_id = p.id
