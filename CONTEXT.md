@@ -37,7 +37,38 @@ Persönliches Stundenerfassungs- und Rechnungsstellungs-Tool. Solo-Nutzer (Chris
 ```
 projekte        — id, name, stundensatz, kunde, kunde_adresse, aktiv
 unterthemen     — id, projekt_id, name, aktiv
-zeiteintraege   — id, datum, projekt_id, unterthema_id, stunden, kategorie, beschreibung, [status, startzeit — geplant]
+zeiteintraege   — id, datum, projekt_id, unterthema_id, stunden, kategorie, beschreibung, status, startzeit
 rechnungen      — id, rechnungsnummer, projekt_id, kunde, gesamtbetrag, status, datum, ...
 firmen_daten    — id=1 (Singleton), firma_name, inhaber, strasse, plz, ort, email, iban, ...
 ```
+
+## Entwicklungs-Workflow (MattPocock Skills)
+
+Jede neue Feature-Entwicklung folgt diesem Ablauf:
+
+```
+/grill-me        → Anforderungen klären (eine Frage nach der anderen)
+                   Ergebnis: gemeinsames Verständnis was gebaut wird
+
+Spec schreiben   → docs/superpowers/specs/YYYY-MM-DD-<thema>-design.md
+                   Enthält: Verhalten, DB-Änderungen, technische Umsetzung, Randfälle
+
+/to-issues       → Spec in GitHub Issues aufbrechen (vertikale Slices)
+                   Jedes Issue = ein unabhängig implementierbarer Schritt
+                   Reihenfolge: von unten (DB) nach oben (UI)
+
+/tdd             → Implementierung mit Red-Green-Refactor Loop
+                   Erst Test schreiben (ROT) → dann Code (GRÜN) → dann aufräumen
+                   Tests in tests/ mit In-Memory SQLite (kein Seiteneffekt auf echte DB)
+
+Commit + Push    → git commit + git push nach jedem abgeschlossenen Issue
+Issues schließen → via GitHub MCP oder manuell auf github.com
+```
+
+**Wichtige Skills:**
+- `/grill-me` — Anforderungen ausarbeiten
+- `/grill-with-docs` — wie grill-me, aber pflegt zusätzlich CONTEXT.md und ADRs
+- `/to-issues` — Plan in GitHub Issues umwandeln
+- `/tdd` — Test-Driven Development
+- `/diagnose` — strukturiertes Debugging
+- `/improve-codebase-architecture` — Codequalität verbessern (regelmäßig laufen lassen)
