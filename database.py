@@ -96,6 +96,15 @@ def init_db():
 
             INSERT OR IGNORE INTO firmen_daten (id) VALUES (1);
         """)
+        # Idempotente Migration: neue Spalten für Live-Tracker
+        for sql in [
+            "ALTER TABLE zeiteintraege ADD COLUMN status TEXT DEFAULT 'fertig'",
+            "ALTER TABLE zeiteintraege ADD COLUMN startzeit TEXT",
+        ]:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # Spalte existiert bereits
 
 
 # --- Projekte ---
@@ -201,6 +210,62 @@ def zeiteintraege_laden(datum_von=None, datum_bis=None, projekt_id=None):
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# --- Live-Tracker ---
+
+def timer_starten(projekt_id, unterthema_id, kategorie, beschreibung, stundensatz):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """INSERT INTO zeiteintraege
+               (datum, projekt_id, unterthema_id, stunden, beschreibung, kategorie, status, startzeit)
+               VALUES (?, ?, ?, 0, ?, ?, 'laufend', ?)""",
+            (date.today().isoformat(), projekt_id, unterthema_id,
+             beschreibung, kategorie, datetime.now().isoformat())
+        )
+        return cursor.lastrowid
+
+
+def timer_stoppen(eintrag_id, beschreibung):
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT startzeit FROM zeiteintraege WHERE id = ?", (eintrag_id,)
+        ).fetchone()
+        startzeit = datetime.fromisoformat(row["startzeit"])
+        dauer = round((datetime.now() - startzeit).total_seconds() / 3600, 2)
+        conn.execute(
+            "UPDATE zeiteintraege SET status='fertig', stunden=?, beschreibung=? WHERE id=?",
+            (dauer, beschreibung, eintrag_id)
+        )
+
+
+def recently_used_laden(limit=3):
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT z.projekt_id, p.name as projekt_name,
+                   z.unterthema_id, u.name as unterthema_name, z.kategorie
+            FROM zeiteintraege z
+            JOIN projekte p ON z.projekt_id = p.id
+            LEFT JOIN unterthemen u ON z.unterthema_id = u.id
+            WHERE z.status = 'fertig'
+            GROUP BY z.projekt_id, z.unterthema_id
+            ORDER BY MAX(z.startzeit) DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def laufenden_timer_laden():
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT z.*, p.name as projekt_name, u.name as unterthema_name, p.stundensatz
+            FROM zeiteintraege z
+            JOIN projekte p ON z.projekt_id = p.id
+            LEFT JOIN unterthemen u ON z.unterthema_id = u.id
+            WHERE z.status = 'laufend'
+            LIMIT 1
+        """).fetchone()
+        return dict(row) if row else None
 
 
 def zeiteintrag_loeschen(eintrag_id):
