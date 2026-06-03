@@ -357,6 +357,45 @@ elif seite == "Dashboard":
                            "kategorie", "beschreibung"]
         vorhandene = [s for s in anzeige_spalten if s in df_all.columns]
         st.dataframe(df_all[vorhandene], use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("Export")
+        ex_col1, ex_col2, ex_col3 = st.columns(3)
+        with ex_col1:
+            export_jahr = st.number_input("Jahr", min_value=2020, max_value=2030,
+                                          value=date.today().year, step=1, key="ex_jahr")
+        with ex_col2:
+            export_monat = st.selectbox("Monat", list(range(1, 13)),
+                                        index=date.today().month - 1,
+                                        format_func=lambda m: date(2000, m, 1).strftime("%B"),
+                                        key="ex_monat")
+        with ex_col3:
+            projekt_optionen = {"Alle Projekte": None}
+            for e in eintraege:
+                projekt_optionen[e["projekt_name"]] = e["projekt_id"]
+            gew_export_projekt = st.selectbox("Projekt", list(projekt_optionen.keys()),
+                                              key="ex_projekt")
+            export_projekt_id = projekt_optionen[gew_export_projekt]
+
+        export_daten = db.zeiteintraege_monat_laden(
+            int(export_jahr), int(export_monat), projekt_id=export_projekt_id
+        )
+        if export_daten:
+            df_export = pd.DataFrame(export_daten)[
+                [c for c in ["datum", "projekt_name", "unterthema_name",
+                              "stunden", "kategorie", "beschreibung"] if c in pd.DataFrame(export_daten).columns]
+            ]
+            dateiname = f"stundenerfassung_{int(export_jahr)}-{int(export_monat):02d}"
+            if export_projekt_id:
+                dateiname += f"_{gew_export_projekt.replace(' ', '_')}"
+            st.download_button(
+                label=f"CSV herunterladen ({len(export_daten)} Einträge)",
+                data=df_export.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig"),
+                file_name=f"{dateiname}.csv",
+                mime="text/csv",
+            )
+        else:
+            st.info("Keine Einträge für diesen Monat/Projekt.")
     else:
         st.info("Keine Einträge im gewählten Zeitraum.")
 

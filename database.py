@@ -301,6 +301,14 @@ def zeiteintrag_aktualisieren(eintrag_id, **kwargs):
         conn.execute(f"UPDATE zeiteintraege SET {set_clause} WHERE id = ?", values)
 
 
+def zeiteintraege_monat_laden(jahr, monat, projekt_id=None):
+    datum_von = f"{jahr}-{monat:02d}-01"
+    import calendar
+    letzter_tag = calendar.monthrange(jahr, monat)[1]
+    datum_bis = f"{jahr}-{monat:02d}-{letzter_tag:02d}"
+    return zeiteintraege_laden(datum_von=datum_von, datum_bis=datum_bis, projekt_id=projekt_id)
+
+
 # --- Statistiken ---
 
 def statistik_pro_projekt(datum_von=None, datum_bis=None):
