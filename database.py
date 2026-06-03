@@ -4,11 +4,17 @@ SQLite Backend mit allen CRUD-Operationen.
 """
 
 import sqlite3
+import random
 from pathlib import Path
 from datetime import datetime, date
 from contextlib import contextmanager
 
 DB_PATH = Path(__file__).parent / "stundenerfassung.db"
+
+PROJEKT_FARBEN = [
+    "#E63946", "#2A9D8F", "#E9C46A", "#457B9D", "#F4A261",
+    "#8338EC", "#06D6A0", "#FB5607", "#3A86FF", "#A8DADC",
+]
 
 
 @contextmanager
@@ -96,10 +102,11 @@ def init_db():
 
             INSERT OR IGNORE INTO firmen_daten (id) VALUES (1);
         """)
-        # Idempotente Migration: neue Spalten für Live-Tracker
+        # Idempotente Migrationen
         for sql in [
             "ALTER TABLE zeiteintraege ADD COLUMN status TEXT DEFAULT 'fertig'",
             "ALTER TABLE zeiteintraege ADD COLUMN startzeit TEXT",
+            "ALTER TABLE projekte ADD COLUMN farbe TEXT",
         ]:
             try:
                 conn.execute(sql)
@@ -110,10 +117,11 @@ def init_db():
 # --- Projekte ---
 
 def projekt_erstellen(name, stundensatz=0.0, kunde="", kunde_adresse=""):
+    farbe = random.choice(PROJEKT_FARBEN)
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO projekte (name, stundensatz, kunde, kunde_adresse) VALUES (?, ?, ?, ?)",
-            (name, stundensatz, kunde, kunde_adresse)
+            "INSERT INTO projekte (name, stundensatz, kunde, kunde_adresse, farbe) VALUES (?, ?, ?, ?, ?)",
+            (name, stundensatz, kunde, kunde_adresse, farbe)
         )
 
 
@@ -123,7 +131,11 @@ def projekte_laden(nur_aktive=True):
             rows = conn.execute("SELECT * FROM projekte WHERE aktiv = 1 ORDER BY name").fetchall()
         else:
             rows = conn.execute("SELECT * FROM projekte ORDER BY name").fetchall()
-        return [dict(r) for r in rows]
+        result = [dict(r) for r in rows]
+        for p in result:
+            if not p.get("farbe"):
+                p["farbe"] = "#AAAAAA"
+        return result
 
 
 def projekt_aktualisieren(projekt_id, **kwargs):
@@ -135,6 +147,11 @@ def projekt_aktualisieren(projekt_id, **kwargs):
     values = list(fields.values()) + [projekt_id]
     with get_connection() as conn:
         conn.execute(f"UPDATE projekte SET {set_clause} WHERE id = ?", values)
+
+
+def projekt_farbe_aktualisieren(projekt_id, farbe):
+    with get_connection() as conn:
+        conn.execute("UPDATE projekte SET farbe = ? WHERE id = ?", (farbe, projekt_id))
 
 
 def projekt_loeschen(projekt_id):
