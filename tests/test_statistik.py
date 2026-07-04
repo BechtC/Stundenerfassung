@@ -9,7 +9,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from datetime import date
 
-from statistik import projekt_summen, fortschritt, heatmap_matrix, stunden_pro_wochentag
+from statistik import (projekt_summen, fortschritt, heatmap_matrix,
+                       stunden_pro_wochentag, wochen_trend)
 
 
 # ============================================================
@@ -134,3 +135,63 @@ def test_stunden_pro_wochentag_kurzer_zeitraum():
     daten = stunden_pro_wochentag(eintraege, date(2026, 7, 1), date(2026, 7, 3))
     assert daten[3]["schnitt"] == 5.0      # 1 Donnerstag im Zeitraum
     assert daten[0]["schnitt"] == 0.0      # kein Montag im Zeitraum, kein Crash
+
+
+# ============================================================
+# Zyklus 8 (Issue #21): Wochen-Trend — ISO-Wochen + Lücken
+# ============================================================
+
+def test_wochen_trend_iso_wochen_und_luecken():
+    """Aggregation nach ISO-Woche (korrekt über Jahresgrenze), Lücken = 0."""
+    eintraege = [
+        {"datum": "2025-12-29", "stunden": 2.0},   # Montag → ISO 2026-W01!
+        {"datum": "2026-01-02", "stunden": 3.0},   # gleiche ISO-Woche
+        {"datum": "2026-01-19", "stunden": 4.0},   # ISO 2026-W04
+    ]
+    trend = wochen_trend(eintraege)
+    wochen = [t["woche"] for t in trend]
+    assert wochen == ["2026-W01", "2026-W02", "2026-W03", "2026-W04"]
+    assert trend[0]["summe"] == 5.0        # W01: 2h + 3h über Jahresgrenze
+    assert trend[1]["summe"] == 0.0        # Lücke aufgefüllt
+    assert trend[3]["summe"] == 4.0
+
+
+def test_wochen_trend_leer():
+    assert wochen_trend([]) == []
+
+
+# ============================================================
+# Zyklus 9 (Issue #21): gleitender 4-Wochen-Schnitt
+# ============================================================
+
+def test_wochen_trend_gleitender_schnitt():
+    """Schnitt über die letzten max. 4 Wochen; bei weniger Wochen über alle."""
+    eintraege = [
+        {"datum": "2026-06-01", "stunden": 10.0},  # W23
+        {"datum": "2026-06-08", "stunden": 20.0},  # W24
+        {"datum": "2026-06-15", "stunden": 30.0},  # W25
+        {"datum": "2026-06-22", "stunden": 40.0},  # W26
+        {"datum": "2026-06-29", "stunden": 50.0},  # W27
+    ]
+    trend = wochen_trend(eintraege)
+    assert trend[0]["schnitt4"] == 10.0            # 1 Woche verfügbar
+    assert trend[1]["schnitt4"] == 15.0            # (10+20)/2
+    assert trend[3]["schnitt4"] == 25.0            # (10+20+30+40)/4
+    assert trend[4]["schnitt4"] == 35.0            # (20+30+40+50)/4 — Fenster rollt
+
+
+# ============================================================
+# Zyklus 10 (Issue #21): Monats-KPI mit Jahreswechsel
+# ============================================================
+
+def test_monats_kpi_jahreswechsel():
+    """Im Januar ist der Vormonat der Dezember des Vorjahres."""
+    from statistik import monats_kpi
+    eintraege = [
+        {"datum": "2025-12-15", "stunden": 8.0},
+        {"datum": "2025-12-20", "stunden": 2.0},
+        {"datum": "2026-01-10", "stunden": 5.0},
+        {"datum": "2025-11-30", "stunden": 99.0},  # weder aktuell noch Vormonat
+    ]
+    kpi = monats_kpi(eintraege, heute=date(2026, 1, 15))
+    assert kpi == {"aktuell": 5.0, "vormonat": 10.0}
