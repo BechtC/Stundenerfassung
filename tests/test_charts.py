@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from charts import tage_auffuellen, bar_projekte
+from charts import tage_auffuellen, bar_projekte, donut_projekte
 
 
 # ============================================================
@@ -44,3 +44,19 @@ def test_bar_projekte_nutzt_projektfarben():
     fig = bar_projekte(stats, farben)
     balken_farben = list(fig.data[0].marker.color)
     assert balken_farben == ["#E63946", "#AAAAAA"]
+
+
+# ============================================================
+# Zyklus (Issue #19): Projekt-Donut in Projektfarben
+# ============================================================
+
+def test_donut_projekte_nutzt_projektfarben():
+    """Donut-Segmente tragen die Projektfarben aus den Summen."""
+    summen = [
+        {"projekt_id": 2, "projekt": "Trading", "farbe": "#457B9D", "gesamt_stunden": 5.0},
+        {"projekt_id": 1, "projekt": "AI Learning", "farbe": "#E63946", "gesamt_stunden": 3.5},
+    ]
+    fig = donut_projekte(summen)
+    assert list(fig.data[0].labels) == ["Trading", "AI Learning"]
+    assert list(fig.data[0].marker.colors) == ["#457B9D", "#E63946"]
+    assert fig.data[0].hole > 0  # Donut, kein Pie

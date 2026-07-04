@@ -47,6 +47,19 @@ def bar_kategorien(stats_kat):
     return fig
 
 
+def donut_projekte(summen):
+    """Donut-Chart der Stundenverteilung pro Projekt in Projektfarben."""
+    fig = go.Figure(go.Pie(
+        labels=[s["projekt"] for s in summen],
+        values=[s["gesamt_stunden"] for s in summen],
+        marker={"colors": [s["farbe"] for s in summen]},
+        hole=0.45,
+        hovertemplate="%{label}: %{value:.2f}h (%{percent})<extra></extra>",
+    ))
+    fig.update_layout(margin=dict(t=10, b=10))
+    return fig
+
+
 def linie_tagesverlauf(tage_stats, von=None, bis=None):
     """Linien-Chart des Tagesverlaufs; Tage ohne Eintrag erscheinen als 0."""
     if tage_stats:
