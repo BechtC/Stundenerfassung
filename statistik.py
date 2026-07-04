@@ -34,6 +34,32 @@ def fortschritt(stunden, ziel):
     }
 
 
+WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def stunden_pro_wochentag(eintraege, von, bis):
+    """Ø und Summe der Stunden je Wochentag Mo–So.
+
+    Der Durchschnitt teilt durch die Anzahl des Wochentags im Zeitraum —
+    Tage ohne Eintrag zählen im Nenner mit.
+    """
+    summen = [0.0] * 7
+    for e in eintraege:
+        summen[date.fromisoformat(e["datum"]).weekday()] += e["stunden"]
+
+    anzahl = [0] * 7
+    tag = von
+    while tag <= bis:
+        anzahl[tag.weekday()] += 1
+        tag += timedelta(days=1)
+
+    return [{
+        "wochentag": WOCHENTAGE[i],
+        "summe": summen[i],
+        "schnitt": summen[i] / anzahl[i] if anzahl[i] else 0.0,
+    } for i in range(7)]
+
+
 def heatmap_matrix(eintraege, jahr):
     """Kalender-Matrix (GitHub-Style) für ein Jahr.
 

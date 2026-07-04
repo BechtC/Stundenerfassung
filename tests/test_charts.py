@@ -8,7 +8,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from charts import tage_auffuellen, bar_projekte, donut_projekte, heatmap_jahr
+from charts import (tage_auffuellen, bar_projekte, donut_projekte, heatmap_jahr,
+                    bar_wochentage)
 
 
 # ============================================================
@@ -77,3 +78,20 @@ def test_heatmap_jahr_uebernimmt_matrix():
     assert heat.type == "heatmap"
     assert [list(r) for r in heat.z] == [[None, 1.0], [0.0, 2.5]]
     assert "%{text}" in heat.hovertemplate  # Tooltip zeigt das Datum
+
+
+# ============================================================
+# Zyklus (Issue #20): Wochentags-Balken mit Summe im Tooltip
+# ============================================================
+
+def test_bar_wochentage_zeigt_schnitt_und_summe():
+    """Balkenhöhe = Durchschnitt, Tooltip enthält zusätzlich die Summe."""
+    daten = [{"wochentag": "Mo", "summe": 6.0, "schnitt": 1.5}] + \
+            [{"wochentag": w, "summe": 0.0, "schnitt": 0.0}
+             for w in ["Di", "Mi", "Do", "Fr", "Sa", "So"]]
+    fig = bar_wochentage(daten)
+    balken = fig.data[0]
+    assert list(balken.x) == ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    assert balken.y[0] == 1.5                       # Höhe = Schnitt
+    assert balken.customdata[0][0] == 6.0           # Summe im Tooltip
+    assert "%{customdata[0]" in balken.hovertemplate

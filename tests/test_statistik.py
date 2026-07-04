@@ -7,7 +7,9 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from statistik import projekt_summen, fortschritt, heatmap_matrix
+from datetime import date
+
+from statistik import projekt_summen, fortschritt, heatmap_matrix, stunden_pro_wochentag
 
 
 # ============================================================
@@ -103,3 +105,32 @@ def test_heatmap_matrix_schaltjahr():
                    if v is not None]
     assert len(zellen_2024) == 366
     assert len(zellen_2026) == 365
+
+
+# ============================================================
+# Zyklus 6 (Issue #20): Ø Stunden pro Wochentag
+# ============================================================
+
+def test_stunden_pro_wochentag_nulltage_im_nenner():
+    """Ø = Summe am Wochentag / Anzahl dieses Wochentags im Zeitraum (Nulltage zählen)."""
+    # Zeitraum 1.–28. Juni 2026 = exakt 4 volle Wochen (Mo 1.6. bis So 28.6.)
+    eintraege = [
+        {"datum": "2026-06-01", "stunden": 4.0},   # Montag
+        {"datum": "2026-06-08", "stunden": 2.0},   # Montag
+        {"datum": "2026-06-03", "stunden": 3.0},   # Mittwoch
+    ]
+    daten = stunden_pro_wochentag(eintraege, date(2026, 6, 1), date(2026, 6, 28))
+    assert len(daten) == 7 and daten[0]["wochentag"] == "Mo"
+    assert daten[0]["summe"] == 6.0
+    assert daten[0]["schnitt"] == 1.5      # 6h auf 4 Montage
+    assert daten[2]["schnitt"] == 0.75     # 3h auf 4 Mittwoche
+    assert daten[6]["summe"] == 0.0        # Sonntag ohne Einträge
+
+
+def test_stunden_pro_wochentag_kurzer_zeitraum():
+    """Zeitraum kürzer als eine Woche: nicht enthaltene Wochentage ⇒ Schnitt 0."""
+    # Mi 1.7. bis Fr 3.7.2026 — enthält weder Montag noch Sonntag
+    eintraege = [{"datum": "2026-07-02", "stunden": 5.0}]  # Donnerstag
+    daten = stunden_pro_wochentag(eintraege, date(2026, 7, 1), date(2026, 7, 3))
+    assert daten[3]["schnitt"] == 5.0      # 1 Donnerstag im Zeitraum
+    assert daten[0]["schnitt"] == 0.0      # kein Montag im Zeitraum, kein Crash

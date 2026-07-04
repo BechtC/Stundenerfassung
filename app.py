@@ -466,6 +466,11 @@ elif seite == "Statistik":
                         use_container_width=True)
 
         st.divider()
+        st.subheader("Wochentags-Analyse")
+        wochentage = statistik.stunden_pro_wochentag(eintraege, von, bis)
+        st.plotly_chart(charts.bar_wochentage(wochentage), use_container_width=True)
+
+        st.divider()
         st.subheader("Projektverteilung")
         st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 

@@ -60,6 +60,19 @@ def donut_projekte(summen):
     return fig
 
 
+def bar_wochentage(daten):
+    """Balken Mo–So: Höhe = Ø Stunden pro Wochentag, Tooltip mit Summe."""
+    fig = go.Figure(go.Bar(
+        x=[d["wochentag"] for d in daten],
+        y=[d["schnitt"] for d in daten],
+        customdata=[[d["summe"]] for d in daten],
+        marker={"color": "#2A9D8F"},
+        hovertemplate="%{x}: Ø %{y:.2f}h (Summe %{customdata[0]:.1f}h)<extra></extra>",
+    ))
+    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Ø Stunden")
+    return fig
+
+
 MONATS_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
                  "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
 
