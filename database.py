@@ -188,8 +188,35 @@ def projekt_farbe_aktualisieren(projekt_id, farbe):
         conn.execute("UPDATE projekte SET farbe = ? WHERE id = ?", (farbe, projekt_id))
 
 
-def projekt_loeschen(projekt_id):
+def projekt_statistik(projekt_id):
+    """Anzahl Zeiteinträge, Unterthemen und Rechnungen (für den Lösch-Dialog)."""
     with get_connection() as conn:
+        zaehle = lambda tabelle: conn.execute(
+            f"SELECT COUNT(*) FROM {tabelle} WHERE projekt_id = ?", (projekt_id,)
+        ).fetchone()[0]
+        return {
+            "zeiteintraege": zaehle("zeiteintraege"),
+            "unterthemen": zaehle("unterthemen"),
+            "rechnungen": zaehle("rechnungen"),
+        }
+
+
+def projekt_loeschen(projekt_id):
+    """Löscht Projekt samt Zeiteinträgen (eine Transaktion).
+
+    Projekte mit Rechnungen sind nicht löschbar — Belege und fortlaufende
+    Rechnungsnummern müssen erhalten bleiben (nur Deaktivieren möglich).
+    """
+    with get_connection() as conn:
+        anzahl_rechnungen = conn.execute(
+            "SELECT COUNT(*) FROM rechnungen WHERE projekt_id = ?", (projekt_id,)
+        ).fetchone()[0]
+        if anzahl_rechnungen:
+            raise ValueError(
+                f"Projekt hat {anzahl_rechnungen} Rechnung(en) — "
+                "Belege müssen erhalten bleiben. Bitte deaktivieren."
+            )
+        conn.execute("DELETE FROM zeiteintraege WHERE projekt_id = ?", (projekt_id,))
         conn.execute("DELETE FROM projekte WHERE id = ?", (projekt_id,))
 
 
