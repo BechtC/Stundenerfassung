@@ -131,6 +131,47 @@ def tageszeit_verteilung(eintraege):
     }
 
 
+def _werktag_verpasst(von_tag, bis_tag, belegt):
+    """True, wenn zwischen von_tag und bis_tag (beide exklusiv) ein
+    unbelegter Werktag liegt."""
+    tag = von_tag + timedelta(days=1)
+    while tag < bis_tag:
+        if tag.weekday() < 5 and tag not in belegt:
+            return True
+        tag += timedelta(days=1)
+    return False
+
+
+def streak_berechnen(datums_liste, heute=None):
+    """Aktuelle und längste Serie belegter Tage.
+
+    Regeln: Ein unbelegter Werktag bricht die Serie; unbelegte Wochenenden
+    überbrücken; belegte Wochenendtage zählen mit. Der heutige Tag bricht
+    nicht, solange er nicht vorbei ist.
+    """
+    heute = heute or date.today()
+    belegt = sorted({date.fromisoformat(d) if isinstance(d, str) else d
+                     for d in datums_liste})
+    if not belegt:
+        return {"aktuell": 0, "laengste": 0}
+
+    belegt_set = set(belegt)
+    serien = []
+    laenge = 1
+    for vorher, jetzt in zip(belegt, belegt[1:]):
+        if _werktag_verpasst(vorher, jetzt, belegt_set):
+            serien.append(laenge)
+            laenge = 1
+        else:
+            laenge += 1
+    serien.append(laenge)
+
+    # Aktuelle Serie lebt, wenn seit dem letzten belegten Tag kein
+    # Werktag VOR heute unbelegt verging (heute ist exklusiv).
+    aktuell = serien[-1] if not _werktag_verpasst(belegt[-1], heute, belegt_set) else 0
+    return {"aktuell": aktuell, "laengste": max(serien)}
+
+
 def heatmap_matrix(eintraege, jahr):
     """Kalender-Matrix (GitHub-Style) für ein Jahr.
 

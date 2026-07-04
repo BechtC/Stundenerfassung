@@ -500,6 +500,16 @@ elif seite == "Statistik":
                     "starte den Live-Tracker, um die Tageszeit-Analyse zu füllen.")
 
         st.divider()
+        st.subheader("Streak")
+        alle_daten = [e["datum"] for e in db.zeiteintraege_laden()]
+        streak = statistik.streak_berechnen(alle_daten)
+        s1, s2 = st.columns(2)
+        s1.metric("Aktuelle Serie", f"{streak['aktuell']} Tage")
+        s2.metric("Längste Serie", f"{streak['laengste']} Tage")
+        st.caption("Serie = Tage mit Einträgen in Folge. Wochenenden ohne "
+                   "Eintrag unterbrechen nicht, der heutige Tag zählt noch offen.")
+
+        st.divider()
         st.subheader("Projektverteilung")
         st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 
