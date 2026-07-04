@@ -13,6 +13,7 @@ from rechnung_pdf import rechnung_als_pdf, monatsexport_als_pdf
 from kalkulator import stundensatz_berechnen, auf_naechste_runden
 from zeitraum import zeitraum_waehlen
 import charts
+import statistik
 
 # --- Init ---
 db.init_db()
@@ -58,6 +59,7 @@ st.sidebar.title("Stundenerfassung")
 seite = st.sidebar.radio("Navigation", [
     "Zeiterfassung",
     "Dashboard",
+    "Statistik",
     "Projekte",
     "Rechnungen",
     "Einstellungen",
@@ -417,6 +419,45 @@ elif seite == "Dashboard":
             st.info("Keine Einträge für diesen Monat/Projekt.")
     else:
         st.info("Keine Einträge im gewählten Zeitraum.")
+
+
+# ============================================================
+# STATISTIK
+# ============================================================
+elif seite == "Statistik":
+    st.header("Statistik")
+
+    von, bis = zeitraum_waehlen("stat", default_preset="Dieses Jahr")
+    eintraege = db.zeiteintraege_laden(datum_von=von.isoformat(),
+                                       datum_bis=bis.isoformat())
+
+    if not eintraege:
+        st.info("Keine Einträge im gewählten Zeitraum.")
+    else:
+        summen = statistik.projekt_summen(eintraege)
+        ziele_map = {z["projekt_id"]: z["stunden_ziel"]
+                     for z in db.ziele_laden(bis.year)}
+
+        st.subheader("Stunden pro Projekt")
+        for zeile_start in range(0, len(summen), 3):
+            cols = st.columns(3)
+            for col, s in zip(cols, summen[zeile_start:zeile_start + 3]):
+                with col:
+                    with st.container(border=True):
+                        st.markdown(
+                            f'<span style="color:{s["farbe"]}">●</span> **{s["projekt"]}**',
+                            unsafe_allow_html=True)
+                        ziel = ziele_map.get(s["projekt_id"])
+                        if ziel:
+                            f = statistik.fortschritt(s["gesamt_stunden"], ziel)
+                            st.progress(f["anteil"], text=f["text"])
+                        else:
+                            stunden_txt = f"{s['gesamt_stunden']:.1f}".replace(".", ",")
+                            st.markdown(f"### {stunden_txt} h")
+
+        st.divider()
+        st.subheader("Projektverteilung")
+        st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 
 
 # ============================================================
