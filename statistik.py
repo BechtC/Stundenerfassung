@@ -3,6 +3,8 @@ Statistik-Berechnungen für die Statistik-Seite.
 Reine Funktionen ohne DB- und Streamlit-Abhängigkeiten.
 """
 
+from datetime import date, timedelta
+
 
 def projekt_summen(eintraege):
     """Summiert Stunden pro Projekt, absteigend sortiert, nur Projekte > 0h."""
@@ -30,3 +32,31 @@ def fortschritt(stunden, ziel):
         "anteil": min(stunden / ziel, 1.0),
         "text": f"{stunden_txt} / {ziel_txt} h ({prozent} %)",
     }
+
+
+def heatmap_matrix(eintraege, jahr):
+    """Kalender-Matrix (GitHub-Style) für ein Jahr.
+
+    Zeile = Wochentag (0=Mo), Spalte = Kalenderwoche. Tage des Jahres ohne
+    Eintrag stehen auf 0, Zellen außerhalb des Jahres auf None.
+    """
+    start = date(jahr, 1, 1)
+    anzahl_tage = (date(jahr, 12, 31) - start).days + 1
+    offset = start.weekday()  # Padding vor dem 1.1. in Spalte 0
+    spalten = (offset + anzahl_tage + 6) // 7
+
+    z = [[None] * spalten for _ in range(7)]
+    text = [[""] * spalten for _ in range(7)]
+    for i in range(anzahl_tage):
+        tag = start + timedelta(days=i)
+        z[tag.weekday()][(offset + i) // 7] = 0.0
+        text[tag.weekday()][(offset + i) // 7] = tag.isoformat()
+
+    for e in eintraege:
+        tag = date.fromisoformat(e["datum"])
+        if tag.year != jahr:
+            continue
+        i = (tag - start).days
+        z[tag.weekday()][(offset + i) // 7] += e["stunden"]
+
+    return {"z": z, "text": text}

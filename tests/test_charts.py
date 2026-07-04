@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from charts import tage_auffuellen, bar_projekte, donut_projekte
+from charts import tage_auffuellen, bar_projekte, donut_projekte, heatmap_jahr
 
 
 # ============================================================
@@ -60,3 +60,20 @@ def test_donut_projekte_nutzt_projektfarben():
     assert list(fig.data[0].labels) == ["Trading", "AI Learning"]
     assert list(fig.data[0].marker.colors) == ["#457B9D", "#E63946"]
     assert fig.data[0].hole > 0  # Donut, kein Pie
+
+
+# ============================================================
+# Zyklus (Issue #22): Jahres-Heatmap
+# ============================================================
+
+def test_heatmap_jahr_uebernimmt_matrix():
+    """Heatmap-Figur trägt die Matrix-Werte und die Datums-Texte für Tooltips."""
+    matrix = {
+        "z": [[None, 1.0], [0.0, 2.5]],
+        "text": [["", "2026-01-05"], ["2026-01-01", "2026-01-06"]],
+    }
+    fig = heatmap_jahr(matrix, 2026)
+    heat = fig.data[0]
+    assert heat.type == "heatmap"
+    assert [list(r) for r in heat.z] == [[None, 1.0], [0.0, 2.5]]
+    assert "%{text}" in heat.hovertemplate  # Tooltip zeigt das Datum
