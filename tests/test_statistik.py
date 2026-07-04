@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from statistik import projekt_summen, fortschritt
+from statistik import projekt_summen, fortschritt, heatmap_matrix
 
 
 # ============================================================
@@ -53,3 +53,53 @@ def test_fortschritt_ueber_hundert():
     f = fortschritt(312.5, 300.0)
     assert f["anteil"] == 1.0
     assert f["text"] == "312,5 / 300 h (104 %)"
+
+
+# ============================================================
+# Zyklus 4 (Issue #22): Heatmap-Matrix — Tag → Zelle
+# ============================================================
+
+def test_heatmap_matrix_ordnet_tage_zu():
+    """Einträge landen in Zeile=Wochentag (0=Mo), Spalte=Kalenderwoche;
+    Tage ohne Eintrag = 0, Zellen vor Jahresbeginn = None."""
+    eintraege = [
+        {"datum": "2026-01-01", "stunden": 2.0},   # Donnerstag
+        {"datum": "2026-01-01", "stunden": 1.5},   # gleicher Tag → summiert
+        {"datum": "2026-01-05", "stunden": 4.0},   # Montag, Woche 2
+    ]
+    m = heatmap_matrix(eintraege, 2026)
+    z = m["z"]
+    assert len(z) == 7                      # 7 Wochentag-Zeilen
+    # 1.1.2026 ist ein Donnerstag → Zeile 3, Spalte 0
+    assert z[3][0] == 3.5
+    # 5.1.2026 ist ein Montag → Zeile 0, Spalte 1
+    assert z[0][1] == 4.0
+    # 2.1.2026 (Freitag, im Jahr, kein Eintrag) → 0
+    assert z[4][0] == 0.0
+    # Mo–Mi vor dem 1.1. gehören nicht zum Jahr → None
+    assert z[0][0] is None and z[2][0] is None
+
+
+# ============================================================
+# Zyklus 5 (Issue #22): Jahresgrenzen + Schaltjahr
+# ============================================================
+
+def test_heatmap_matrix_ignoriert_fremde_jahre():
+    """Einträge aus Nachbarjahren fließen nicht in die Matrix ein."""
+    eintraege = [
+        {"datum": "2025-12-31", "stunden": 8.0},
+        {"datum": "2027-01-01", "stunden": 8.0},
+    ]
+    m = heatmap_matrix(eintraege, 2026)
+    werte = [v for zeile in m["z"] for v in zeile if v is not None]
+    assert sum(werte) == 0.0
+
+
+def test_heatmap_matrix_schaltjahr():
+    """2024 (Schaltjahr) hat 366 aktive Zellen, 2026 hat 365."""
+    zellen_2024 = [v for zeile in heatmap_matrix([], 2024)["z"] for v in zeile
+                   if v is not None]
+    zellen_2026 = [v for zeile in heatmap_matrix([], 2026)["z"] for v in zeile
+                   if v is not None]
+    assert len(zellen_2024) == 366
+    assert len(zellen_2026) == 365

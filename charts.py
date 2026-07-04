@@ -60,6 +60,35 @@ def donut_projekte(summen):
     return fig
 
 
+MONATS_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+                 "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
+
+
+def heatmap_jahr(matrix, jahr):
+    """GitHub-Style Kalender-Heatmap eines Jahres (Zeile=Wochentag, Spalte=Woche)."""
+    fig = go.Figure(go.Heatmap(
+        z=matrix["z"],
+        text=matrix["text"],
+        y=["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+        colorscale=[[0, "#EBEDF0"], [1, "#216E39"]],
+        xgap=2, ygap=2,
+        hovertemplate="%{text}: %{z:.2f}h<extra></extra>",
+        hoverongaps=False,
+        showscale=False,
+    ))
+    # Monatsnamen an der Spalte ihres Monatsersten
+    start = date(jahr, 1, 1)
+    offset = start.weekday()
+    tick_pos = [(offset + (date(jahr, m, 1) - start).days) // 7 for m in range(1, 13)]
+    fig.update_layout(
+        xaxis={"tickvals": tick_pos, "ticktext": MONATS_LABELS, "showgrid": False},
+        yaxis={"autorange": "reversed", "showgrid": False},
+        margin=dict(t=10, b=10),
+        height=220,
+    )
+    return fig
+
+
 def linie_tagesverlauf(tage_stats, von=None, bis=None):
     """Linien-Chart des Tagesverlaufs; Tage ohne Eintrag erscheinen als 0."""
     if tage_stats:

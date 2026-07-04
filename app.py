@@ -456,6 +456,16 @@ elif seite == "Statistik":
                             st.markdown(f"### {stunden_txt} h")
 
         st.divider()
+        heatmap_jahr_wert = bis.year
+        st.subheader(f"Jahres-Heatmap {heatmap_jahr_wert}")
+        jahres_eintraege = db.zeiteintraege_laden(
+            datum_von=f"{heatmap_jahr_wert}-01-01",
+            datum_bis=f"{heatmap_jahr_wert}-12-31")
+        matrix = statistik.heatmap_matrix(jahres_eintraege, heatmap_jahr_wert)
+        st.plotly_chart(charts.heatmap_jahr(matrix, heatmap_jahr_wert),
+                        use_container_width=True)
+
+        st.divider()
         st.subheader("Projektverteilung")
         st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 
