@@ -11,6 +11,8 @@ from datetime import datetime, date, timedelta
 import database as db
 from rechnung_pdf import rechnung_als_pdf, monatsexport_als_pdf
 from kalkulator import stundensatz_berechnen, auf_naechste_runden
+from zeitraum import zeitraum_waehlen
+import charts
 
 # --- Init ---
 db.init_db()
@@ -294,7 +296,13 @@ if seite == "Zeiterfassung":
         if letzte_woche:
             df = pd.DataFrame(letzte_woche)
             df_grouped = df.groupby("datum")["stunden"].sum().reset_index()
-            st.bar_chart(df_grouped.set_index("datum"))
+            tage_stats = [{"datum": r["datum"], "gesamt_stunden": r["stunden"]}
+                          for _, r in df_grouped.iterrows()]
+            st.plotly_chart(
+                charts.linie_tagesverlauf(tage_stats,
+                                          date.today() - timedelta(days=7),
+                                          date.today()),
+                use_container_width=True)
 
 
 # ============================================================
@@ -303,11 +311,7 @@ if seite == "Zeiterfassung":
 elif seite == "Dashboard":
     st.header("Dashboard")
 
-    col_filter1, col_filter2 = st.columns(2)
-    with col_filter1:
-        von = st.date_input("Von", value=date.today().replace(day=1))
-    with col_filter2:
-        bis = st.date_input("Bis", value=date.today())
+    von, bis = zeitraum_waehlen("dash", default_preset="Dieser Monat")
 
     von_str = von.isoformat()
     bis_str = bis.isoformat()
@@ -334,22 +338,24 @@ elif seite == "Dashboard":
             st.subheader("Stunden pro Projekt")
             stats_projekt = db.statistik_pro_projekt(von_str, bis_str)
             if stats_projekt:
-                df_p = pd.DataFrame(stats_projekt)
-                st.bar_chart(df_p.set_index("projekt")["gesamt_stunden"])
+                farben_map = {p["name"]: p["farbe"]
+                              for p in db.projekte_laden(nur_aktive=False)}
+                st.plotly_chart(charts.bar_projekte(stats_projekt, farben_map),
+                                use_container_width=True)
 
         with col_chart2:
             st.subheader("Stunden pro Kategorie")
             stats_kat = db.statistik_pro_kategorie(von_str, bis_str)
             if stats_kat:
-                df_k = pd.DataFrame(stats_kat)
-                st.bar_chart(df_k.set_index("kategorie")["gesamt_stunden"])
+                st.plotly_chart(charts.bar_kategorien(stats_kat),
+                                use_container_width=True)
 
         st.divider()
         st.subheader("Tagesverlauf")
         tage_stats = db.stunden_pro_tag(von_str, bis_str)
         if tage_stats:
-            df_t = pd.DataFrame(tage_stats)
-            st.line_chart(df_t.set_index("datum")["gesamt_stunden"])
+            st.plotly_chart(charts.linie_tagesverlauf(tage_stats, von, bis),
+                            use_container_width=True)
 
         st.divider()
         st.subheader("Alle Einträge")
