@@ -5,8 +5,9 @@ SQLite Backend mit allen CRUD-Operationen.
 
 import sqlite3
 import random
+import shutil
 from pathlib import Path
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from contextlib import contextmanager
 
 DB_PATH = Path(__file__).parent / "stundenerfassung.db"
@@ -121,6 +122,30 @@ def init_db():
                 conn.execute(sql)
             except Exception:
                 pass  # Spalte existiert bereits
+
+
+# --- Backup ---
+
+def backup_erstellen(ziel_ordner, retention_tage=30):
+    """Tagesbackup der DB: einmal pro Tag kopieren, alte Backups aufräumen."""
+    ziel = Path(ziel_ordner)
+    ziel.mkdir(exist_ok=True)
+    heute = date.today()
+
+    backup_datei = ziel / f"stundenerfassung_{heute.isoformat()}.db"
+    if not backup_datei.exists():
+        shutil.copy2(DB_PATH, backup_datei)
+
+    grenze = heute - timedelta(days=retention_tage)
+    for datei in ziel.glob("stundenerfassung_*.db"):
+        datum_teil = datei.stem.replace("stundenerfassung_", "")
+        try:
+            if date.fromisoformat(datum_teil) < grenze:
+                datei.unlink()
+        except ValueError:
+            pass  # fremde Datei ohne Datumsnamen — nicht anfassen
+
+    return backup_datei
 
 
 # --- Projekte ---
