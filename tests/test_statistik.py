@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from datetime import date
 
 from statistik import (projekt_summen, fortschritt, heatmap_matrix,
-                       stunden_pro_wochentag, wochen_trend, tageszeit_verteilung)
+                       stunden_pro_wochentag, wochen_trend, tageszeit_verteilung,
+                       streak_berechnen)
 
 
 # ============================================================
@@ -225,3 +226,49 @@ def test_tageszeit_verteilung_ohne_startzeiten():
     v = tageszeit_verteilung([{"startzeit": None, "stunden": 4.0}])
     assert sum(v["verteilung"]) == 0.0
     assert v["mit_startzeit"] == 0 and v["gesamt"] == 1
+
+
+# ============================================================
+# Zyklus 12 (Issue #24): Streak — Wochenende bricht nicht
+# ============================================================
+
+def test_streak_wochenende_bricht_nicht():
+    """Fr und Mo belegt, Sa/So leer ⇒ eine Serie von 2 Tagen."""
+    # 3.7.2026 = Freitag, 6.7.2026 = Montag
+    s = streak_berechnen(["2026-07-03", "2026-07-06"], heute=date(2026, 7, 6))
+    assert s == {"aktuell": 2, "laengste": 2}
+
+
+# ============================================================
+# Zyklus 13 (Issue #24): Streak-Randfälle
+# ============================================================
+
+def test_streak_leerer_werktag_bricht():
+    """Mo+Di belegt, Mi leer, Do belegt ⇒ aktuelle Serie 1, längste 2."""
+    # 29.6. Mo, 30.6. Di, 2.7. Do (Mi 1.7. leer)
+    s = streak_berechnen(["2026-06-29", "2026-06-30", "2026-07-02"],
+                         heute=date(2026, 7, 2))
+    assert s == {"aktuell": 1, "laengste": 2}
+
+
+def test_streak_heute_offen():
+    """Heute ohne Eintrag bricht die Serie (noch) nicht."""
+    # Gestern (Do 2.7.) belegt, heute Fr 3.7. noch leer ⇒ Serie lebt
+    s = streak_berechnen(["2026-07-01", "2026-07-02"], heute=date(2026, 7, 3))
+    assert s["aktuell"] == 2
+    # Aber: liegt zwischen letztem Eintrag und heute ein leerer Werktag ⇒ 0
+    s2 = streak_berechnen(["2026-07-01"], heute=date(2026, 7, 3))  # Do 2.7. leer
+    assert s2["aktuell"] == 0
+    assert s2["laengste"] == 1
+
+
+def test_streak_wochenendeintraege_zaehlen():
+    """Belegte Wochenendtage verlängern die Serie."""
+    # Fr 3.7. + Sa 4.7. + So 5.7. + Mo 6.7. ⇒ Serie 4
+    s = streak_berechnen(["2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06"],
+                         heute=date(2026, 7, 6))
+    assert s == {"aktuell": 4, "laengste": 4}
+
+
+def test_streak_leere_liste():
+    assert streak_berechnen([], heute=date(2026, 7, 4)) == {"aktuell": 0, "laengste": 0}
