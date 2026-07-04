@@ -43,6 +43,9 @@ if "timer_aktiv" not in st.session_state:
 if "stopp_dialog_offen" not in st.session_state:
     st.session_state.stopp_dialog_offen = False
 
+if "loesch_projekt" not in st.session_state:
+    st.session_state.loesch_projekt = None
+
 st.set_page_config(
     page_title="Stundenerfassung",
     page_icon="⏱️",
@@ -225,6 +228,39 @@ def stopp_dialog():
 
 if st.session_state.stopp_dialog_offen:
     stopp_dialog()
+
+# --- Projekt-Lösch-Dialog ---
+@st.dialog("Projekt löschen")
+def loesch_dialog():
+    projekt = st.session_state.loesch_projekt
+    stats = db.projekt_statistik(projekt["id"])
+
+    if stats["rechnungen"] > 0:
+        st.warning(f"**{projekt['name']}** hat {stats['rechnungen']} Rechnung(en) — "
+                   "Belege müssen erhalten bleiben. Bitte deaktivieren statt löschen.")
+        d1, d2 = st.columns(2)
+        if d1.button("Deaktivieren", type="primary", use_container_width=True):
+            db.projekt_aktualisieren(projekt["id"], aktiv=0)
+            st.session_state.loesch_projekt = None
+            st.rerun()
+        if d2.button("Abbrechen", use_container_width=True):
+            st.session_state.loesch_projekt = None
+            st.rerun()
+    else:
+        st.warning(f"Löscht **{projekt['name']}** mit {stats['zeiteintraege']} "
+                   f"Zeiteinträgen und {stats['unterthemen']} Unterthemen "
+                   "unwiderruflich.")
+        d1, d2 = st.columns(2)
+        if d1.button("Endgültig löschen", type="primary", use_container_width=True):
+            db.projekt_loeschen(projekt["id"])
+            st.session_state.loesch_projekt = None
+            st.rerun()
+        if d2.button("Abbrechen", use_container_width=True):
+            st.session_state.loesch_projekt = None
+            st.rerun()
+
+if st.session_state.loesch_projekt:
+    loesch_dialog()
 
 # ============================================================
 # ZEITERFASSUNG
@@ -643,7 +679,7 @@ elif seite == "Projekte":
                         db.projekt_aktualisieren(p["id"], aktiv=1)
                         st.rerun()
                 if bc2.button("Löschen", key=f"del_p_{p['id']}", type="secondary"):
-                    db.projekt_loeschen(p["id"])
+                    st.session_state.loesch_projekt = {"id": p["id"], "name": p["name"]}
                     st.rerun()
 
 
