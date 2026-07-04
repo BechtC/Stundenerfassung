@@ -18,6 +18,12 @@ import statistik
 # --- Init ---
 db.init_db()
 
+# --- Tagesbackup (darf den App-Start nie verhindern) ---
+try:
+    db.backup_erstellen(Path(__file__).parent / "backups")
+except Exception as backup_fehler:
+    print(f"WARNUNG: Backup fehlgeschlagen: {backup_fehler}")
+
 # --- Timer Session State aus DB wiederherstellen (Reload-Resistenz) ---
 if "timer_aktiv" not in st.session_state:
     laufender = db.laufenden_timer_laden()
