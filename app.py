@@ -471,6 +471,22 @@ elif seite == "Statistik":
         st.plotly_chart(charts.bar_wochentage(wochentage), use_container_width=True)
 
         st.divider()
+        st.subheader("Trend")
+        heute = date.today()
+        vormonat_start = (heute.replace(day=1) - timedelta(days=1)).replace(day=1)
+        kpi_eintraege = db.zeiteintraege_laden(datum_von=vormonat_start.isoformat(),
+                                               datum_bis=heute.isoformat())
+        kpi = statistik.monats_kpi(kpi_eintraege, heute)
+        delta = kpi["aktuell"] - kpi["vormonat"]
+        t1, t2 = st.columns(2)
+        t1.metric("Dieser Monat", f"{kpi['aktuell']:.1f}h".replace(".", ","),
+                  delta=f"{delta:+.1f}h vs. Vormonat".replace(".", ","))
+        t2.metric("Vormonat", f"{kpi['vormonat']:.1f}h".replace(".", ","))
+        trend = statistik.wochen_trend(eintraege)
+        if trend:
+            st.plotly_chart(charts.trend_wochen(trend), use_container_width=True)
+
+        st.divider()
         st.subheader("Projektverteilung")
         st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 

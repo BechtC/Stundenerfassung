@@ -60,6 +60,56 @@ def stunden_pro_wochentag(eintraege, von, bis):
     } for i in range(7)]
 
 
+def wochen_trend(eintraege):
+    """Wochensummen nach ISO-Woche mit gleitendem 4-Wochen-Schnitt.
+
+    Wochen ohne Eintrag zwischen erster und letzter Woche erscheinen mit 0,
+    damit Chart und Schnitt keine Lücken verschweigen.
+    """
+    summen = {}
+    for e in eintraege:
+        iso = date.fromisoformat(e["datum"]).isocalendar()
+        schluessel = (iso[0], iso[1])
+        summen[schluessel] = summen.get(schluessel, 0.0) + e["stunden"]
+    if not summen:
+        return []
+
+    wochen = []
+    jahr, woche = min(summen)
+    while (jahr, woche) <= max(summen):
+        wochen.append((jahr, woche))
+        naechste = date.fromisocalendar(jahr, woche, 1) + timedelta(weeks=1)
+        iso = naechste.isocalendar()
+        jahr, woche = iso[0], iso[1]
+
+    ergebnis = []
+    for i, (j, w) in enumerate(wochen):
+        fenster = [summen.get(x, 0.0) for x in wochen[max(0, i - 3):i + 1]]
+        ergebnis.append({
+            "woche": f"{j}-W{w:02d}",
+            "summe": summen.get((j, w), 0.0),
+            "schnitt4": sum(fenster) / len(fenster),
+        })
+    return ergebnis
+
+
+def monats_kpi(eintraege, heute):
+    """Stundensumme des aktuellen Monats und des Vormonats (inkl. Jahreswechsel)."""
+    if heute.month == 1:
+        vormonat = (heute.year - 1, 12)
+    else:
+        vormonat = (heute.year, heute.month - 1)
+
+    kpi = {"aktuell": 0.0, "vormonat": 0.0}
+    for e in eintraege:
+        d = date.fromisoformat(e["datum"])
+        if (d.year, d.month) == (heute.year, heute.month):
+            kpi["aktuell"] += e["stunden"]
+        elif (d.year, d.month) == vormonat:
+            kpi["vormonat"] += e["stunden"]
+    return kpi
+
+
 def heatmap_matrix(eintraege, jahr):
     """Kalender-Matrix (GitHub-Style) für ein Jahr.
 

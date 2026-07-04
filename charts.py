@@ -73,6 +73,26 @@ def bar_wochentage(daten):
     return fig
 
 
+def trend_wochen(trend):
+    """Wochensummen als Balken + gleitender 4-Wochen-Schnitt als Linie."""
+    wochen = [t["woche"] for t in trend]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=wochen, y=[t["summe"] for t in trend],
+        name="Wochenstunden", marker={"color": "#A8DADC"},
+        hovertemplate="%{x}: %{y:.1f}h<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=wochen, y=[t["schnitt4"] for t in trend],
+        name="4-Wochen-Schnitt", mode="lines",
+        line={"color": "#E63946", "width": 2},
+        hovertemplate="%{x}: Ø %{y:.1f}h<extra></extra>",
+    ))
+    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden",
+                      legend={"orientation": "h", "y": 1.1})
+    return fig
+
+
 MONATS_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
                  "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
 
