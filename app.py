@@ -466,6 +466,8 @@ elif seite == "Projekte":
     with col2:
         st.subheader("Vorhandene Projekte")
         projekte = db.projekte_laden(nur_aktive=False)
+        ziel_jahr = date.today().year
+        ziele_map = {z["projekt_id"]: z["stunden_ziel"] for z in db.ziele_laden(ziel_jahr)}
 
         for p in projekte:
             farbe = p.get("farbe", "#AAAAAA") or "#AAAAAA"
@@ -477,6 +479,17 @@ elif seite == "Projekte":
                     db.projekt_farbe_aktualisieren(p["id"], neue_farbe)
                     st.rerun()
                 st.markdown(f"{punkt} Vorschau Farbpunkt", unsafe_allow_html=True)
+                st.divider()
+                # Jahresziel
+                zc1, zc2 = st.columns([3, 1])
+                ziel_wert = zc1.number_input(
+                    f"Jahresziel {ziel_jahr} (Stunden)", min_value=0.0,
+                    value=float(ziele_map.get(p["id"], 0.0)), step=10.0,
+                    key=f"ziel_{p['id']}", help="0 = kein Ziel"
+                )
+                if zc2.button("Ziel speichern", key=f"ziel_save_{p['id']}"):
+                    db.ziel_setzen(p["id"], ziel_jahr, ziel_wert)
+                    st.rerun()
                 st.divider()
                 # Unterthemen
                 unterthemen = db.unterthemen_laden(p["id"], nur_aktive=False)
