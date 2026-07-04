@@ -487,6 +487,19 @@ elif seite == "Statistik":
             st.plotly_chart(charts.trend_wochen(trend), use_container_width=True)
 
         st.divider()
+        st.subheader("Tageszeit-Analyse")
+        tageszeit = statistik.tageszeit_verteilung(eintraege)
+        if tageszeit["mit_startzeit"] > 0:
+            st.plotly_chart(charts.bar_tageszeit(tageszeit["verteilung"]),
+                            use_container_width=True)
+            st.caption(f"Basiert auf {tageszeit['mit_startzeit']} von "
+                       f"{tageszeit['gesamt']} Einträgen "
+                       f"(nur Timer-Einträge haben eine Startzeit).")
+        else:
+            st.info("Noch keine Timer-Einträge mit Startzeit im Zeitraum — "
+                    "starte den Live-Tracker, um die Tageszeit-Analyse zu füllen.")
+
+        st.divider()
         st.subheader("Projektverteilung")
         st.plotly_chart(charts.donut_projekte(summen), use_container_width=True)
 

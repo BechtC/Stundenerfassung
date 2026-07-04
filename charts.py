@@ -73,6 +73,18 @@ def bar_wochentage(daten):
     return fig
 
 
+def bar_tageszeit(verteilung):
+    """Histogramm der Startstunden 0–23 Uhr, gewichtet nach Dauer."""
+    fig = go.Figure(go.Bar(
+        x=[f"{h} Uhr" for h in range(24)],
+        y=verteilung,
+        marker={"color": "#8338EC"},
+        hovertemplate="%{x}: %{y:.2f}h<extra></extra>",
+    ))
+    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden")
+    return fig
+
+
 def trend_wochen(trend):
     """Wochensummen als Balken + gleitender 4-Wochen-Schnitt als Linie."""
     wochen = [t["woche"] for t in trend]

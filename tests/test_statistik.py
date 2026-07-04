@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from datetime import date
 
 from statistik import (projekt_summen, fortschritt, heatmap_matrix,
-                       stunden_pro_wochentag, wochen_trend)
+                       stunden_pro_wochentag, wochen_trend, tageszeit_verteilung)
 
 
 # ============================================================
@@ -195,3 +195,33 @@ def test_monats_kpi_jahreswechsel():
     ]
     kpi = monats_kpi(eintraege, heute=date(2026, 1, 15))
     assert kpi == {"aktuell": 5.0, "vormonat": 10.0}
+
+
+# ============================================================
+# Zyklus 11 (Issue #23): Tageszeit-Verteilung
+# ============================================================
+
+def test_tageszeit_verteilung_gewichtet_nach_dauer():
+    """Startstunde bekommt die Dauer des Eintrags; Einträge ohne startzeit
+    fließen nicht ein, werden aber gezählt."""
+    eintraege = [
+        {"startzeit": "2026-07-01T08:30:00", "stunden": 2.0},
+        {"startzeit": "2026-07-02T08:05:12", "stunden": 1.5},
+        {"startzeit": "2026-07-02T21:00:00", "stunden": 1.0},
+        {"startzeit": None, "stunden": 4.0},        # manuell erfasst
+        {"stunden": 3.0},                           # startzeit-Feld fehlt ganz
+    ]
+    v = tageszeit_verteilung(eintraege)
+    assert len(v["verteilung"]) == 24
+    assert v["verteilung"][8] == 3.5                # 2h + 1,5h um 8 Uhr
+    assert v["verteilung"][21] == 1.0
+    assert v["verteilung"][0] == 0.0
+    assert v["mit_startzeit"] == 3
+    assert v["gesamt"] == 5
+
+
+def test_tageszeit_verteilung_ohne_startzeiten():
+    """Keine Timer-Einträge ⇒ leere Verteilung, mit_startzeit 0, kein Crash."""
+    v = tageszeit_verteilung([{"startzeit": None, "stunden": 4.0}])
+    assert sum(v["verteilung"]) == 0.0
+    assert v["mit_startzeit"] == 0 and v["gesamt"] == 1
