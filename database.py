@@ -100,6 +100,15 @@ def init_db():
                 bic TEXT DEFAULT 'XXXXXXXX'
             );
 
+            CREATE TABLE IF NOT EXISTS ziele (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                projekt_id INTEGER NOT NULL,
+                jahr INTEGER NOT NULL,
+                stunden_ziel REAL NOT NULL,
+                FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE,
+                UNIQUE(projekt_id, jahr)
+            );
+
             INSERT OR IGNORE INTO firmen_daten (id) VALUES (1);
         """)
         # Idempotente Migrationen
@@ -157,6 +166,31 @@ def projekt_farbe_aktualisieren(projekt_id, farbe):
 def projekt_loeschen(projekt_id):
     with get_connection() as conn:
         conn.execute("DELETE FROM projekte WHERE id = ?", (projekt_id,))
+
+
+# --- Ziele ---
+
+def ziel_setzen(projekt_id, jahr, stunden_ziel):
+    with get_connection() as conn:
+        if stunden_ziel <= 0:
+            conn.execute(
+                "DELETE FROM ziele WHERE projekt_id = ? AND jahr = ?",
+                (projekt_id, jahr)
+            )
+            return
+        conn.execute(
+            """INSERT INTO ziele (projekt_id, jahr, stunden_ziel) VALUES (?, ?, ?)
+               ON CONFLICT(projekt_id, jahr) DO UPDATE SET stunden_ziel = excluded.stunden_ziel""",
+            (projekt_id, jahr, stunden_ziel)
+        )
+
+
+def ziele_laden(jahr):
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT projekt_id, stunden_ziel FROM ziele WHERE jahr = ?", (jahr,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # --- Unterthemen ---
