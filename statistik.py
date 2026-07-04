@@ -3,7 +3,7 @@ Statistik-Berechnungen für die Statistik-Seite.
 Reine Funktionen ohne DB- und Streamlit-Abhängigkeiten.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 def projekt_summen(eintraege):
@@ -108,6 +108,27 @@ def monats_kpi(eintraege, heute):
         elif (d.year, d.month) == vormonat:
             kpi["vormonat"] += e["stunden"]
     return kpi
+
+
+def tageszeit_verteilung(eintraege):
+    """Stunden je Startstunde (0–23), gewichtet nach Eintragsdauer.
+
+    Nur Einträge mit startzeit (Timer) fließen ein; gesamt/mit_startzeit
+    erlauben den Hinweis "basiert auf X von Y Einträgen".
+    """
+    verteilung = [0.0] * 24
+    mit_startzeit = 0
+    for e in eintraege:
+        startzeit = e.get("startzeit")
+        if not startzeit:
+            continue
+        mit_startzeit += 1
+        verteilung[datetime.fromisoformat(startzeit).hour] += e["stunden"]
+    return {
+        "verteilung": verteilung,
+        "mit_startzeit": mit_startzeit,
+        "gesamt": len(eintraege),
+    }
 
 
 def heatmap_matrix(eintraege, jahr):
