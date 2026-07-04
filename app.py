@@ -545,13 +545,25 @@ elif seite == "Projekte":
             if st.button("Berechnen", key="k_berechnen"):
                 try:
                     roh = stundensatz_berechnen(k_netto, k_tage, k_nfh, k_puffer)
-                    gerundet = auf_naechste_runden(roh, k_rund)
-                    st.info(f"Rohwert: **{roh:.2f} EUR/h** → Gerundet: **{gerundet} EUR/h**")
-                    if st.button(f"Stundensatz {gerundet} EUR übernehmen", key="k_uebernehmen"):
-                        st.session_state["k_vorschlag"] = float(gerundet)
-                        st.rerun()
+                    st.session_state["k_ergebnis"] = {
+                        "roh": roh,
+                        "gerundet": auf_naechste_runden(roh, k_rund),
+                    }
                 except ValueError as e:
+                    st.session_state.pop("k_ergebnis", None)
                     st.error(str(e))
+
+            # Ergebnis lebt in session_state, damit der Übernehmen-Button
+            # Reruns überdauert (Buttons in Buttons funktionieren nicht)
+            k_ergebnis = st.session_state.get("k_ergebnis")
+            if k_ergebnis:
+                st.info(f"Rohwert: **{k_ergebnis['roh']:.2f} EUR/h** → "
+                        f"Gerundet: **{k_ergebnis['gerundet']} EUR/h**")
+                if st.button(f"Stundensatz {k_ergebnis['gerundet']} EUR übernehmen",
+                             key="k_uebernehmen"):
+                    st.session_state["k_vorschlag"] = float(k_ergebnis["gerundet"])
+                    st.session_state.pop("k_ergebnis", None)
+                    st.rerun()
 
         with st.form("neues_projekt"):
             p_name = st.text_input("Projektname")
