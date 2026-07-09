@@ -396,6 +396,10 @@ def tray_starten_falls_noetig():
 
 def main():
     """Startet Overlay-Fenster (Hauptthread) + Tray-Icon (Nebenthread)."""
+    # Selbstschutz: Läuft bereits ein anderer, lebender Tray-Prozess, sofort
+    # beenden — verhindert ein zweites Overlay/Icon (auch bei Start-Race).
+    if tray_laeuft_bereits():
+        return
     _lockfile_schreiben()
     tray = TrayTimer()
 
