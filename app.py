@@ -24,6 +24,17 @@ try:
 except Exception as backup_fehler:
     print(f"WARNUNG: Backup fehlgeschlagen: {backup_fehler}")
 
+# --- Timer-Tray-App automatisch mitstarten (nur einmal, nie blockierend) ---
+# Läuft die Stundenerfassung (egal ob aus AI-Tool-OS oder start.bat), erscheint
+# automatisch das Timer-Icon im Windows-Infobereich. Dieser Aufruf steht bewusst
+# auf Modul-Ebene (läuft einmal beim Server-Start, unabhängig von einer Browser-
+# Session); der Mehrfachstart-Schutz liegt im Lockfile in tray_starten_falls_noetig().
+try:
+    import tray_timer
+    tray_timer.tray_starten_falls_noetig()
+except Exception as tray_fehler:
+    print(f"WARNUNG: Tray-Autostart fehlgeschlagen: {tray_fehler}")
+
 # --- Timer Session State aus DB wiederherstellen (Reload-Resistenz) ---
 if "timer_aktiv" not in st.session_state:
     laufender = db.laufenden_timer_laden()
@@ -42,6 +53,9 @@ if "timer_aktiv" not in st.session_state:
 
 if "stopp_dialog_offen" not in st.session_state:
     st.session_state.stopp_dialog_offen = False
+
+if "edit_eintrag_id" not in st.session_state:
+    st.session_state.edit_eintrag_id = None
 
 if "loesch_projekt" not in st.session_state:
     st.session_state.loesch_projekt = None
@@ -208,8 +222,12 @@ def stopp_dialog():
     st.write(f"**Projekt:** {st.session_state.timer_projekt_name}" +
              (f" › {st.session_state.timer_unterthema_name}"
               if st.session_state.timer_unterthema_name else ""))
-    st.write(f"**Dauer:** {h}h {m}min → {stunden_dezimal}h")
+    st.caption(f"Automatisch erfasst: {h}h {m}min → {stunden_dezimal}h")
 
+    dauer = st.number_input("Dauer (Stunden)", min_value=0.0, max_value=24.0,
+                            value=stunden_dezimal, step=0.25,
+                            help="Vorbelegt mit der erfassten Zeit — bei vergessenem "
+                                 "Stoppen hier korrigieren.")
     kat = st.selectbox("Kategorie", db.KATEGORIEN,
                        index=db.KATEGORIEN.index(st.session_state.timer_kategorie)
                        if st.session_state.timer_kategorie in db.KATEGORIEN else 0)
@@ -218,7 +236,8 @@ def stopp_dialog():
     c1, c2 = st.columns(2)
     if c1.button("Speichern", type="primary", use_container_width=True):
         db.timer_stoppen(st.session_state.timer_eintrag_id, beschreibung=kommentar)
-        db.zeiteintrag_aktualisieren(st.session_state.timer_eintrag_id, kategorie=kat)
+        db.zeiteintrag_aktualisieren(st.session_state.timer_eintrag_id,
+                                     stunden=round(dauer, 2), kategorie=kat)
         st.session_state.timer_aktiv = False
         st.session_state.stopp_dialog_offen = False
         st.rerun()
@@ -261,6 +280,51 @@ def loesch_dialog():
 
 if st.session_state.loesch_projekt:
     loesch_dialog()
+
+# --- Auffälliges Live-Timer-Banner im Hauptbereich (alle Seiten) ---
+import streamlit.components.v1 as components
+
+if st.session_state.timer_aktiv:
+    _startzeit_iso = st.session_state.timer_startzeit
+    _projekt_label = st.session_state.timer_projekt_name
+    if st.session_state.timer_unterthema_name:
+        _projekt_label += f" › {st.session_state.timer_unterthema_name}"
+    _farbe = st.session_state.get("timer_projekt_farbe", "#AAAAAA") or "#AAAAAA"
+    _label_js = json.dumps(_projekt_label)
+    components.html(f"""
+        <div style="background:{_farbe}22; border:2px solid {_farbe};
+             border-radius:10px; padding:10px 18px; margin-bottom:6px;
+             display:flex; align-items:center; gap:16px; font-family:sans-serif;">
+          <span style="font-size:2.4em;">⏱</span>
+          <div style="flex:1;">
+            <div style="font-size:1.1em; font-weight:600; color:{_farbe};">
+              {_projekt_label}</div>
+            <div id="bigtimer" style="font-size:2.4em; font-family:monospace;
+                 font-weight:700; line-height:1.1;">00:00:00</div>
+          </div>
+          <span style="font-size:0.9em; opacity:0.7;">läuft…</span>
+        </div>
+        <script>
+          const start = new Date("{_startzeit_iso}");
+          const projekt = {_label_js};
+          function tick() {{
+            const diff = Math.floor((new Date() - start) / 1000);
+            const h = String(Math.floor(diff/3600)).padStart(2,'0');
+            const m = String(Math.floor((diff%3600)/60)).padStart(2,'0');
+            const s = String(diff%60).padStart(2,'0');
+            document.getElementById('bigtimer').textContent = h+':'+m+':'+s;
+            // Tab-Titel live mittickern (sichtbar in Chrome-Tableiste / Alt-Tab)
+            window.parent.document.title = "⏱ "+h+":"+m+":"+s+" · "+projekt;
+          }}
+          tick();
+          setInterval(tick, 1000);
+        </script>
+    """, height=90)
+else:
+    # Kein Timer aktiv → Tab-Titel zurücksetzen (falls von vorher gesetzt)
+    components.html("""
+        <script>window.parent.document.title = "Stundenerfassung";</script>
+    """, height=0)
 
 # ============================================================
 # ZEITERFASSUNG
@@ -319,7 +383,7 @@ if seite == "Zeiterfassung":
 
             for e in eintraege:
                 with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+                    c1, c2, c3, c4, c5 = st.columns([3, 2, 1, 1, 1])
                     pfarbe = e.get("projekt_farbe") or "#AAAAAA"
                     pname = f'<span style="color:{pfarbe}">●</span> **{e["projekt_name"]}**'
                     if e.get("unterthema_name"):
@@ -327,11 +391,49 @@ if seite == "Zeiterfassung":
                     c1.markdown(pname, unsafe_allow_html=True)
                     c2.write(e.get("beschreibung", ""))
                     c3.write(f"{e['stunden']:.2f}h")
-                    if c4.button("X", key=f"del_{e['id']}"):
+                    if c4.button("✏", key=f"edit_{e['id']}", help="Bearbeiten"):
+                        st.session_state.edit_eintrag_id = e["id"]
+                        st.rerun()
+                    if c5.button("X", key=f"del_{e['id']}", help="Löschen"):
                         db.zeiteintrag_loeschen(e["id"])
                         st.rerun()
         else:
             st.info("Noch keine Einträge heute.")
+
+        # --- Bearbeiten-Dialog für einen heutigen Eintrag ---
+        if st.session_state.edit_eintrag_id is not None:
+            _e = next((x for x in eintraege
+                       if x["id"] == st.session_state.edit_eintrag_id), None)
+            if _e is None:
+                st.session_state.edit_eintrag_id = None
+            else:
+                @st.dialog("Eintrag bearbeiten")
+                def edit_dialog(eintrag):
+                    st.write(f"**Projekt:** {eintrag['projekt_name']}" +
+                             (f" › {eintrag['unterthema_name']}"
+                              if eintrag.get("unterthema_name") else ""))
+                    dauer = st.number_input("Dauer (Stunden)", min_value=0.0,
+                                            max_value=24.0, value=float(eintrag["stunden"]),
+                                            step=0.25)
+                    kat_wert = eintrag.get("kategorie", "Produktiv")
+                    kat = st.selectbox("Kategorie", db.KATEGORIEN,
+                                       index=db.KATEGORIEN.index(kat_wert)
+                                       if kat_wert in db.KATEGORIEN else 0)
+                    kommentar = st.text_area("Beschreibung",
+                                             value=eintrag.get("beschreibung", "") or "",
+                                             height=80)
+                    c1, c2 = st.columns(2)
+                    if c1.button("Speichern", type="primary", use_container_width=True):
+                        db.zeiteintrag_aktualisieren(eintrag["id"],
+                                                     stunden=round(dauer, 2),
+                                                     kategorie=kat,
+                                                     beschreibung=kommentar)
+                        st.session_state.edit_eintrag_id = None
+                        st.rerun()
+                    if c2.button("Abbrechen", use_container_width=True):
+                        st.session_state.edit_eintrag_id = None
+                        st.rerun()
+                edit_dialog(_e)
 
         st.divider()
         st.subheader("Letzte 7 Tage")
