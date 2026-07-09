@@ -34,6 +34,9 @@ APP_URL = "http://localhost:8502"
 # Lockfile mit der PID des laufenden Tray-Prozesses (verhindert Mehrfachstart)
 _LOCKFILE = Path(__file__).parent / ".tray.pid"
 
+# Merkt sich die zuletzt gewählte Overlay-Position (Drag & Drop bleibt erhalten)
+_POSFILE = Path(__file__).parent / ".overlay_pos.json"
+
 # --- Farben für das Icon ---
 _GRAU = (140, 140, 140)
 _GRUEN = (46, 160, 67)
@@ -204,10 +207,14 @@ class OverlayFenster:
         self.root.overrideredirect(True)          # randlos, keine Titelleiste
         self.root.attributes("-topmost", True)    # immer im Vordergrund
         self.root.attributes("-alpha", 0.95)
-        # Startposition: oben rechts
+        # Startposition: gespeicherte Position, sonst oben rechts als Default
         self.root.update_idletasks()
         sw = self.root.winfo_screenwidth()
-        self.root.geometry(f"300x92+{sw - 320}+20")
+        pos = self._position_laden()
+        if pos:
+            self.root.geometry(f"300x92+{pos[0]}+{pos[1]}")
+        else:
+            self.root.geometry(f"300x92+{sw - 320}+20")
 
         self._rahmen = tk.Frame(self.root, bg="#c0392b", bd=0,
                                 highlightthickness=3, highlightbackground="#ffffff")
@@ -230,13 +237,15 @@ class OverlayFenster:
         self._stop_btn.place(relx=1.0, rely=1.0, anchor="se", x=-6, y=-6)
         self._stop_btn.bind("<Button-1>", self._stop_geklickt)
 
-        # Verschieben per Drag auf Rahmen/Labels
+        # Verschieben per Drag auf Rahmen/Labels; Position beim Loslassen merken
         for w in (self._rahmen, self._projekt_label, self._timer_label):
             w.bind("<Button-1>", self._drag_start)
             w.bind("<B1-Motion>", self._drag_move)
+            w.bind("<ButtonRelease-1>", self._drag_ende)
 
         self.root.withdraw()   # startet versteckt (nur zeigen wenn Timer läuft)
         self._sichtbar = False
+        self._beendet = False
 
     # --- Fenster verschieben ---
     def _drag_start(self, event):
@@ -247,6 +256,26 @@ class OverlayFenster:
         x = self.root.winfo_x() + (event.x - self._drag["x"])
         y = self.root.winfo_y() + (event.y - self._drag["y"])
         self.root.geometry(f"+{x}+{y}")
+
+    def _drag_ende(self, event):
+        # gewählte Position dauerhaft merken (überlebt Stopp/App-Neustart)
+        self._position_speichern(self.root.winfo_x(), self.root.winfo_y())
+
+    # --- Positions-Persistenz ---
+    def _position_laden(self):
+        try:
+            import json
+            daten = json.loads(_POSFILE.read_text(encoding="utf-8"))
+            return int(daten["x"]), int(daten["y"])
+        except Exception:
+            return None
+
+    def _position_speichern(self, x, y):
+        try:
+            import json
+            _POSFILE.write_text(json.dumps({"x": x, "y": y}), encoding="utf-8")
+        except Exception:
+            pass
 
     def _stop_geklickt(self, event):
         if self._on_stop:
@@ -283,13 +312,15 @@ class OverlayFenster:
                     self._sichtbar = False
         except Exception:
             pass
-        self.root.after(1000, self._aktualisieren)
+        if not self._beendet:
+            self.root.after(1000, self._aktualisieren)
 
     def run(self):
         self._aktualisieren()
         self.root.mainloop()
 
     def beenden(self):
+        self._beendet = True
         try:
             self.root.after(0, self.root.destroy)
         except Exception:

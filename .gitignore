@@ -31,3 +31,6 @@ backups/
 
 # Tray-App Laufzeit-Lockfile (PID)
 .tray.pid
+
+# Overlay-Position (persistiert Drag & Drop, lokal)
+.overlay_pos.json
