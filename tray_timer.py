@@ -84,6 +84,7 @@ def _format_hms(sekunden):
 class TrayTimer:
     def __init__(self):
         self._warnung_gesendet = False
+        self._overlay = None   # wird von main() gesetzt (zum Mitbeenden)
         self._icon = pystray.Icon(
             "stundenerfassung",
             icon=_ICONS["grau"],
@@ -134,6 +135,8 @@ class TrayTimer:
             webbrowser.open(APP_URL)
 
     def _beenden(self, icon, item):
+        if self._overlay:
+            self._overlay.beenden()
         icon.stop()
 
     # --- Poll-Schleife (eigener Thread) ---
@@ -167,13 +170,130 @@ class TrayTimer:
                 pass
             time.sleep(POLL_SEKUNDEN)
 
-    def run(self):
-        _lockfile_schreiben()
+    def run_detached(self):
+        """Startet nur das Tray-Icon (pystray) im aktuellen Thread.
+        Das Overlay-Fenster läuft separat im Hauptthread (siehe main())."""
+        self._icon.run(setup=lambda icon: threading.Thread(
+            target=self._poll_loop, args=(icon,), daemon=True).start())
+
+    def stop(self):
         try:
-            self._icon.run(setup=lambda icon: threading.Thread(
-                target=self._poll_loop, args=(icon,), daemon=True).start())
-        finally:
-            _lockfile_entfernen()
+            self._icon.stop()
+        except Exception:
+            pass
+
+
+# ============================================================
+# Schwebendes Overlay-Fenster (Always-on-Top, groß, unübersehbar)
+# ============================================================
+
+class OverlayFenster:
+    """Ein randloses, immer im Vordergrund schwebendes Fenster, das den
+    laufenden Timer groß und farbig anzeigt (Timer + Projektname). Sichtbar
+    nur solange ein Timer läuft. Mit der Maus frei verschiebbar; Klick auf
+    'Stoppen' bucht den Eintrag. tkinter läuft im Hauptthread."""
+
+    def __init__(self, on_stop=None, on_beenden=None):
+        import tkinter as tk
+        self._tk = tk
+        self._on_stop = on_stop            # Callback: Timer stoppen
+        self._on_beenden = on_beenden      # Callback: ganze App beenden
+        self._drag = {"x": 0, "y": 0}
+
+        self.root = tk.Tk()
+        self.root.overrideredirect(True)          # randlos, keine Titelleiste
+        self.root.attributes("-topmost", True)    # immer im Vordergrund
+        self.root.attributes("-alpha", 0.95)
+        # Startposition: oben rechts
+        self.root.update_idletasks()
+        sw = self.root.winfo_screenwidth()
+        self.root.geometry(f"300x92+{sw - 320}+20")
+
+        self._rahmen = tk.Frame(self.root, bg="#c0392b", bd=0,
+                                highlightthickness=3, highlightbackground="#ffffff")
+        self._rahmen.pack(fill="both", expand=True)
+
+        self._projekt_label = tk.Label(
+            self._rahmen, text="", bg="#c0392b", fg="#ffffff",
+            font=("Segoe UI", 11, "bold"), anchor="w")
+        self._projekt_label.pack(fill="x", padx=12, pady=(8, 0))
+
+        self._timer_label = tk.Label(
+            self._rahmen, text="00:00:00", bg="#c0392b", fg="#ffffff",
+            font=("Consolas", 30, "bold"))
+        self._timer_label.pack(fill="x", padx=12)
+
+        # Stoppen-Button (klein, unten rechts im Overlay)
+        self._stop_btn = tk.Label(
+            self._rahmen, text="■ Stoppen", bg="#7d241a", fg="#ffffff",
+            font=("Segoe UI", 9, "bold"), cursor="hand2", padx=8, pady=2)
+        self._stop_btn.place(relx=1.0, rely=1.0, anchor="se", x=-6, y=-6)
+        self._stop_btn.bind("<Button-1>", self._stop_geklickt)
+
+        # Verschieben per Drag auf Rahmen/Labels
+        for w in (self._rahmen, self._projekt_label, self._timer_label):
+            w.bind("<Button-1>", self._drag_start)
+            w.bind("<B1-Motion>", self._drag_move)
+
+        self.root.withdraw()   # startet versteckt (nur zeigen wenn Timer läuft)
+        self._sichtbar = False
+
+    # --- Fenster verschieben ---
+    def _drag_start(self, event):
+        self._drag["x"] = event.x
+        self._drag["y"] = event.y
+
+    def _drag_move(self, event):
+        x = self.root.winfo_x() + (event.x - self._drag["x"])
+        y = self.root.winfo_y() + (event.y - self._drag["y"])
+        self.root.geometry(f"+{x}+{y}")
+
+    def _stop_geklickt(self, event):
+        if self._on_stop:
+            self._on_stop()
+
+    # --- periodische Aktualisierung aus der DB (im Hauptthread via after) ---
+    def _aktualisieren(self):
+        try:
+            laufender = _laufenden_timer()
+            if laufender:
+                sek = _laufzeit_sekunden(laufender)
+                label = laufender.get("projekt_name", "?")
+                if laufender.get("unterthema_name"):
+                    label += f" › {laufender['unterthema_name']}"
+                self._projekt_label.config(text="⏱ " + label)
+                self._timer_label.config(text=_format_hms(sek))
+                # Farbe: ab WARN_STUNDEN dunkler/dringlicher blinken
+                if sek >= WARN_STUNDEN * 3600:
+                    # blinken zwischen zwei Rottönen
+                    blink = (sek % 2 == 0)
+                    farbe = "#e74c3c" if blink else "#7d241a"
+                else:
+                    farbe = "#c0392b"
+                self._rahmen.config(bg=farbe)
+                self._projekt_label.config(bg=farbe)
+                self._timer_label.config(bg=farbe)
+                if not self._sichtbar:
+                    self.root.deiconify()
+                    self.root.attributes("-topmost", True)
+                    self._sichtbar = True
+            else:
+                if self._sichtbar:
+                    self.root.withdraw()
+                    self._sichtbar = False
+        except Exception:
+            pass
+        self.root.after(1000, self._aktualisieren)
+
+    def run(self):
+        self._aktualisieren()
+        self.root.mainloop()
+
+    def beenden(self):
+        try:
+            self.root.after(0, self.root.destroy)
+        except Exception:
+            pass
 
 
 # ============================================================
@@ -243,5 +363,36 @@ def tray_starten_falls_noetig():
         return False
 
 
+def main():
+    """Startet Overlay-Fenster (Hauptthread) + Tray-Icon (Nebenthread)."""
+    _lockfile_schreiben()
+    tray = TrayTimer()
+
+    def stop_timer():
+        # aus dem Overlay heraus stoppen (nutzt dieselbe Logik wie das Tray-Menü)
+        laufender = _laufenden_timer()
+        if not laufender:
+            return
+        try:
+            db.timer_stoppen(laufender["id"],
+                             beschreibung=laufender.get("beschreibung", "") or "")
+            tray._warnung_gesendet = False
+        except Exception:
+            pass
+
+    overlay = OverlayFenster(on_stop=stop_timer)
+    tray._overlay = overlay
+
+    # Tray-Icon im Hintergrund-Thread (pystray)
+    tray_thread = threading.Thread(target=tray.run_detached, daemon=True)
+    tray_thread.start()
+
+    try:
+        overlay.run()          # blockiert im Hauptthread bis Fenster zerstört
+    finally:
+        tray.stop()
+        _lockfile_entfernen()
+
+
 if __name__ == "__main__":
-    TrayTimer().run()
+    main()
