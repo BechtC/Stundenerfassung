@@ -12,10 +12,13 @@ Grundprinzip: Die DB ist die einzige Wahrheitsquelle. Tray-App und Streamlit
 teilen sich den status='laufend'-Datensatz in zeiteintraege.
 """
 
+import os
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 import pystray
@@ -27,6 +30,9 @@ POLL_SEKUNDEN = 2            # DB-Abfrage-Intervall
 WARN_STUNDEN = 3.0          # ab dieser Laufzeit: rotes Icon + Benachrichtigung
 CHROME = r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 APP_URL = "http://localhost:8502"
+
+# Lockfile mit der PID des laufenden Tray-Prozesses (verhindert Mehrfachstart)
+_LOCKFILE = Path(__file__).parent / ".tray.pid"
 
 # --- Farben für das Icon ---
 _GRAU = (140, 140, 140)
@@ -162,8 +168,79 @@ class TrayTimer:
             time.sleep(POLL_SEKUNDEN)
 
     def run(self):
-        self._icon.run(setup=lambda icon: threading.Thread(
-            target=self._poll_loop, args=(icon,), daemon=True).start())
+        _lockfile_schreiben()
+        try:
+            self._icon.run(setup=lambda icon: threading.Thread(
+                target=self._poll_loop, args=(icon,), daemon=True).start())
+        finally:
+            _lockfile_entfernen()
+
+
+# ============================================================
+# Autostart-Hilfen (werden von app.py beim App-Start aufgerufen)
+# ============================================================
+
+def _pid_laeuft(pid):
+    """True, wenn ein Prozess mit dieser PID existiert (Windows)."""
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+        return str(pid) in out
+    except Exception:
+        return False
+
+
+def _lockfile_schreiben():
+    try:
+        _LOCKFILE.write_text(str(os.getpid()), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _lockfile_entfernen():
+    try:
+        _LOCKFILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def tray_laeuft_bereits():
+    """Prüft anhand des Lockfiles, ob schon ein Tray-Prozess aktiv ist.
+    Räumt ein verwaistes Lockfile (Prozess tot) selbst auf."""
+    if not _LOCKFILE.exists():
+        return False
+    try:
+        pid = int(_LOCKFILE.read_text(encoding="utf-8").strip())
+    except Exception:
+        _lockfile_entfernen()
+        return False
+    if _pid_laeuft(pid):
+        return True
+    _lockfile_entfernen()  # verwaist
+    return False
+
+
+def tray_starten_falls_noetig():
+    """Startet die Tray-App als eigenständigen Hintergrundprozess (ohne
+    Konsolenfenster), falls noch keine läuft. Idempotent — mehrfacher Aufruf
+    (z.B. Streamlit-Reruns) startet nur einmal. Wirft nie eine Exception nach
+    außen, damit der App-Start nie blockiert wird."""
+    try:
+        if tray_laeuft_bereits():
+            return False
+        skript = str(Path(__file__).resolve())
+        # pythonw.exe = Python ohne Konsolenfenster; Fallback auf sys.executable
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        exe = str(pythonw) if pythonw.exists() else sys.executable
+        flags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
+        subprocess.Popen([exe, skript], cwd=str(Path(__file__).parent),
+                         creationflags=flags, close_fds=True)
+        return True
+    except Exception as fehler:
+        print(f"WARNUNG: Tray-Autostart fehlgeschlagen: {fehler}")
+        return False
 
 
 if __name__ == "__main__":

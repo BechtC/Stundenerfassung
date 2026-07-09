@@ -24,6 +24,17 @@ try:
 except Exception as backup_fehler:
     print(f"WARNUNG: Backup fehlgeschlagen: {backup_fehler}")
 
+# --- Timer-Tray-App automatisch mitstarten (nur einmal, nie blockierend) ---
+# Läuft die Stundenerfassung (egal ob aus AI-Tool-OS oder start.bat), erscheint
+# automatisch das Timer-Icon im Windows-Infobereich. Dieser Aufruf steht bewusst
+# auf Modul-Ebene (läuft einmal beim Server-Start, unabhängig von einer Browser-
+# Session); der Mehrfachstart-Schutz liegt im Lockfile in tray_starten_falls_noetig().
+try:
+    import tray_timer
+    tray_timer.tray_starten_falls_noetig()
+except Exception as tray_fehler:
+    print(f"WARNUNG: Tray-Autostart fehlgeschlagen: {tray_fehler}")
+
 # --- Timer Session State aus DB wiederherstellen (Reload-Resistenz) ---
 if "timer_aktiv" not in st.session_state:
     laufender = db.laufenden_timer_laden()

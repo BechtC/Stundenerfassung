@@ -28,3 +28,6 @@ CLAUDE.local.md
 
 # Backups (persoenliche Daten)
 backups/
+
+# Tray-App Laufzeit-Lockfile (PID)
+.tray.pid
