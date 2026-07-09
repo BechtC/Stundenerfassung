@@ -143,6 +143,42 @@ def test_laufenden_timer_laden_gibt_eintrag_zurueck(mem_db):
     assert result["status"] == "laufend"
 
 
+# ============================================================
+# Zyklus 6: Dauer-Korrektur (Stopp-Dialog + Bearbeiten)
+# ============================================================
+
+def test_dauer_korrektur_ueberschreibt_stunden(mem_db):
+    """Der Stopp-Dialog-Flow: nach timer_stoppen überschreibt
+    zeiteintrag_aktualisieren(stunden=...) die auto-berechnete Dauer.
+    Deckt den Fall 'vergessen zu stoppen → 3h → auf 0.5h korrigieren' ab."""
+    projekt_id = _projekt(mem_db)
+    with patch.object(db, "DB_PATH", mem_db):
+        eid = db.timer_starten(projekt_id=projekt_id, unterthema_id=None,
+                               kategorie="Produktiv", beschreibung="", stundensatz=80.0)
+        db.timer_stoppen(eid, beschreibung="Feierabend")
+        # Nutzer korrigiert die Dauer im Dialog:
+        db.zeiteintrag_aktualisieren(eid, stunden=0.5, kategorie="Meeting")
+        eintrag = next(e for e in db.zeiteintraege_laden() if e["id"] == eid)
+    assert eintrag["stunden"] == 0.5
+    assert eintrag["kategorie"] == "Meeting"
+    assert eintrag["status"] == "fertig"
+
+
+def test_eintrag_bearbeiten_aendert_alle_felder(mem_db):
+    """Nachträgliches Bearbeiten: Dauer, Kategorie und Beschreibung ändern."""
+    projekt_id = _projekt(mem_db)
+    with patch.object(db, "DB_PATH", mem_db):
+        eid = db.timer_starten(projekt_id=projekt_id, unterthema_id=None,
+                               kategorie="Produktiv", beschreibung="alt", stundensatz=80.0)
+        db.timer_stoppen(eid, beschreibung="alt")
+        db.zeiteintrag_aktualisieren(eid, stunden=2.25, kategorie="Admin",
+                                     beschreibung="neu")
+        eintrag = next(e for e in db.zeiteintraege_laden() if e["id"] == eid)
+    assert eintrag["stunden"] == 2.25
+    assert eintrag["kategorie"] == "Admin"
+    assert eintrag["beschreibung"] == "neu"
+
+
 def test_migration_spalten_vorhanden(mem_db):
     """zeiteintraege hat nach Migration die Spalten status und startzeit."""
     with patch.object(db, "DB_PATH", mem_db):
