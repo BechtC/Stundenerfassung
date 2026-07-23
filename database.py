@@ -329,13 +329,18 @@ def timer_starten(projekt_id, unterthema_id, kategorie, beschreibung, stundensat
         return cursor.lastrowid
 
 
-def timer_stoppen(eintrag_id, beschreibung):
+def timer_stoppen(eintrag_id, beschreibung, endzeit=None):
+    """Stoppt den Timer. Ohne endzeit gilt 'jetzt' als Ende; mit endzeit
+    (datetime) wird die Dauer aus startzeit -> endzeit berechnet — für den
+    Fall, dass das Ausstempeln vergessen wurde. Negative Dauer wird auf 0
+    geklemmt (UI validiert davor)."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT startzeit FROM zeiteintraege WHERE id = ?", (eintrag_id,)
         ).fetchone()
         startzeit = datetime.fromisoformat(row["startzeit"])
-        dauer = round((datetime.now() - startzeit).total_seconds() / 3600, 2)
+        ende = endzeit if endzeit is not None else datetime.now()
+        dauer = max(0.0, round((ende - startzeit).total_seconds() / 3600, 2))
         conn.execute(
             "UPDATE zeiteintraege SET status='fertig', stunden=?, beschreibung=? WHERE id=?",
             (dauer, beschreibung, eintrag_id)
@@ -377,7 +382,7 @@ def zeiteintrag_loeschen(eintrag_id):
 
 
 def zeiteintrag_aktualisieren(eintrag_id, **kwargs):
-    allowed = {"datum", "projekt_id", "unterthema_id", "stunden", "beschreibung", "kategorie"}
+    allowed = {"datum", "projekt_id", "unterthema_id", "stunden", "beschreibung", "kategorie", "startzeit"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
         return

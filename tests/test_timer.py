@@ -179,6 +179,78 @@ def test_eintrag_bearbeiten_aendert_alle_felder(mem_db):
     assert eintrag["beschreibung"] == "neu"
 
 
+# ============================================================
+# Zyklus 7: timer_stoppen() mit expliziter Endzeit
+# ============================================================
+
+def test_timer_stoppen_mit_endzeit(mem_db):
+    """Vergessenes Ausstempeln: Endzeit explizit setzen → Dauer wird
+    aus startzeit → endzeit berechnet (08:00 → 13:00 = 5.0h)."""
+    from datetime import datetime
+    projekt_id = _projekt(mem_db)
+    with patch.object(db, "DB_PATH", mem_db):
+        eid = db.timer_starten(projekt_id=projekt_id, unterthema_id=None,
+                               kategorie="Produktiv", beschreibung="", stundensatz=80.0)
+        # startzeit auf heute 08:00 zurückdatieren
+        start = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+        with db.get_connection() as conn:
+            conn.execute("UPDATE zeiteintraege SET startzeit=? WHERE id=?",
+                         (start.isoformat(), eid))
+        ende = start.replace(hour=13)
+        db.timer_stoppen(eid, beschreibung="Feierabend", endzeit=ende)
+        eintrag = next(e for e in db.zeiteintraege_laden() if e["id"] == eid)
+    assert eintrag["stunden"] == 5.0
+    assert eintrag["status"] == "fertig"
+
+
+def test_timer_stoppen_endzeit_vor_start_clampt_auf_null(mem_db):
+    """Endzeit vor Startzeit darf keine negative Dauer erzeugen."""
+    from datetime import datetime, timedelta
+    projekt_id = _projekt(mem_db)
+    with patch.object(db, "DB_PATH", mem_db):
+        eid = db.timer_starten(projekt_id=projekt_id, unterthema_id=None,
+                               kategorie="Produktiv", beschreibung="", stundensatz=80.0)
+        ende = datetime.now() - timedelta(hours=2)
+        db.timer_stoppen(eid, beschreibung="", endzeit=ende)
+        eintrag = next(e for e in db.zeiteintraege_laden() if e["id"] == eid)
+    assert eintrag["stunden"] == 0.0
+
+
+# ============================================================
+# Zyklus 8: Historie + nachträgliche Startzeit-Korrektur
+# ============================================================
+
+def test_zeiteintrag_aktualisieren_startzeit(mem_db):
+    """Startzeit nachträglich ändern (z. B. 'hab 30 Min früher angefangen')."""
+    from datetime import datetime
+    projekt_id = _projekt(mem_db)
+    with patch.object(db, "DB_PATH", mem_db):
+        eid = db.timer_starten(projekt_id=projekt_id, unterthema_id=None,
+                               kategorie="Produktiv", beschreibung="", stundensatz=80.0)
+        db.timer_stoppen(eid, beschreibung="")
+        neue_start = datetime.now().replace(hour=7, minute=30, second=0, microsecond=0)
+        db.zeiteintrag_aktualisieren(eid, startzeit=neue_start.isoformat(), stunden=5.5)
+        eintrag = next(e for e in db.zeiteintraege_laden() if e["id"] == eid)
+    assert eintrag["startzeit"] == neue_start.isoformat()
+    assert eintrag["stunden"] == 5.5
+
+
+def test_zeiteintraege_laden_sortierung_neueste_zuerst(mem_db):
+    """Historie: Einträge kommen nach Datum absteigend (neueste oben)."""
+    from datetime import date, timedelta
+    projekt_id = _projekt(mem_db)
+    heute = date.today()
+    with patch.object(db, "DB_PATH", mem_db):
+        for tage_zurueck in [2, 0, 1]:  # bewusst unsortiert einfügen
+            db.zeiteintrag_erstellen(
+                datum=(heute - timedelta(days=tage_zurueck)).isoformat(),
+                projekt_id=projekt_id, unterthema_id=None,
+                stunden=1.0, beschreibung="", kategorie="Produktiv")
+        eintraege = db.zeiteintraege_laden()
+    daten = [e["datum"] for e in eintraege]
+    assert daten == sorted(daten, reverse=True)
+
+
 def test_migration_spalten_vorhanden(mem_db):
     """zeiteintraege hat nach Migration die Spalten status und startzeit."""
     with patch.object(db, "DB_PATH", mem_db):

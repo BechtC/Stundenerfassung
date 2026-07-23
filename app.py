@@ -54,8 +54,8 @@ if "timer_aktiv" not in st.session_state:
 if "stopp_dialog_offen" not in st.session_state:
     st.session_state.stopp_dialog_offen = False
 
-if "edit_eintrag_id" not in st.session_state:
-    st.session_state.edit_eintrag_id = None
+if "edit_eintrag" not in st.session_state:
+    st.session_state.edit_eintrag = None
 
 if "loesch_projekt" not in st.session_state:
     st.session_state.loesch_projekt = None
@@ -205,23 +205,36 @@ else:
 # --- Stopp-Dialog ---
 @st.dialog("Timer stoppen")
 def stopp_dialog():
-    from datetime import datetime as dt
+    from datetime import datetime as dt, timedelta
     startzeit = dt.fromisoformat(st.session_state.timer_startzeit)
     jetzt = dt.now()
-    diff_sek = int((jetzt - startzeit).total_seconds())
-    stunden_dezimal = round(diff_sek / 3600, 2)
-    minuten = diff_sek // 60
-    h, m = divmod(minuten, 60)
 
     st.write(f"**Projekt:** {st.session_state.timer_projekt_name}" +
              (f" › {st.session_state.timer_unterthema_name}"
               if st.session_state.timer_unterthema_name else ""))
-    st.caption(f"Automatisch erfasst: {h}h {m}min → {stunden_dezimal}h")
+    st.caption(f"Gestartet: {startzeit.strftime('%d.%m.%Y %H:%M')} Uhr")
 
+    # Endzeit-Eingabe: vorbelegt mit jetzt — bei vergessenem Ausstempeln
+    # einfach die tatsächliche Schlusszeit wählen, die Dauer folgt automatisch.
+    endzeit_uhr = st.time_input("Endzeit", value=jetzt.time(), step=300)
+    endzeit = dt.combine(startzeit.date(), endzeit_uhr)
+    if endzeit < startzeit:
+        # Über-Mitternacht-Fall: gewählte Uhrzeit liegt vor der Start-Uhrzeit
+        endzeit += timedelta(days=1)
+
+    diff_sek = int((endzeit - startzeit).total_seconds())
+    stunden_dezimal = round(diff_sek / 3600, 2)
+    h, m = divmod(diff_sek // 60, 60)
+    st.caption(f"{startzeit.strftime('%H:%M')} → {endzeit.strftime('%H:%M')} "
+               f"= {h}h {m}min ({stunden_dezimal}h)")
+
+    # key enthält die Endzeit: bei Endzeit-Änderung setzt Streamlit das Feld
+    # auf den neu berechneten Wert zurück; manuelles Umtippen gewinnt sonst.
     dauer = st.number_input("Dauer (Stunden)", min_value=0.0, max_value=24.0,
                             value=stunden_dezimal, step=0.25,
-                            help="Vorbelegt mit der erfassten Zeit — bei vergessenem "
-                                 "Stoppen hier korrigieren.")
+                            key=f"stopp_dauer_{endzeit_uhr}",
+                            help="Folgt der Endzeit — hier nur ändern, wenn du "
+                                 "die Dauer direkt setzen willst.")
     kat = st.selectbox("Kategorie", db.KATEGORIEN,
                        index=db.KATEGORIEN.index(st.session_state.timer_kategorie)
                        if st.session_state.timer_kategorie in db.KATEGORIEN else 0)
@@ -229,7 +242,8 @@ def stopp_dialog():
 
     c1, c2 = st.columns(2)
     if c1.button("Speichern", type="primary", use_container_width=True):
-        db.timer_stoppen(st.session_state.timer_eintrag_id, beschreibung=kommentar)
+        db.timer_stoppen(st.session_state.timer_eintrag_id, beschreibung=kommentar,
+                         endzeit=endzeit)
         db.zeiteintrag_aktualisieren(st.session_state.timer_eintrag_id,
                                      stunden=round(dauer, 2), kategorie=kat)
         st.session_state.timer_aktiv = False
@@ -367,6 +381,24 @@ if seite == "Zeiterfassung":
                 st.rerun()
 
     with col2:
+        def _eintrag_karte(e):
+            """Eine Eintrags-Karte mit Bearbeiten/Löschen — für heute + Historie."""
+            with st.container(border=True):
+                c1, c2, c3, c4, c5 = st.columns([3, 2, 1, 1, 1])
+                pfarbe = e.get("projekt_farbe") or "#AAAAAA"
+                pname = f'<span style="color:{pfarbe}">●</span> **{e["projekt_name"]}**'
+                if e.get("unterthema_name"):
+                    pname += f' › {e["unterthema_name"]}'
+                c1.markdown(pname, unsafe_allow_html=True)
+                c2.write(e.get("beschreibung", ""))
+                c3.write(f"{e['stunden']:.2f}h")
+                if c4.button("✏", key=f"edit_{e['id']}", help="Bearbeiten"):
+                    st.session_state.edit_eintrag = e
+                    st.rerun()
+                if c5.button("X", key=f"del_{e['id']}", help="Löschen"):
+                    db.zeiteintrag_loeschen(e["id"])
+                    st.rerun()
+
         st.subheader("Heutige Einträge")
         heute = date.today().isoformat()
         eintraege = db.zeiteintraege_laden(datum_von=heute, datum_bis=heute)
@@ -374,60 +406,118 @@ if seite == "Zeiterfassung":
         if eintraege:
             gesamt = sum(e["stunden"] for e in eintraege)
             st.metric("Heute gesamt", f"{gesamt:.2f} Stunden")
-
             for e in eintraege:
-                with st.container(border=True):
-                    c1, c2, c3, c4, c5 = st.columns([3, 2, 1, 1, 1])
-                    pfarbe = e.get("projekt_farbe") or "#AAAAAA"
-                    pname = f'<span style="color:{pfarbe}">●</span> **{e["projekt_name"]}**'
-                    if e.get("unterthema_name"):
-                        pname += f' › {e["unterthema_name"]}'
-                    c1.markdown(pname, unsafe_allow_html=True)
-                    c2.write(e.get("beschreibung", ""))
-                    c3.write(f"{e['stunden']:.2f}h")
-                    if c4.button("✏", key=f"edit_{e['id']}", help="Bearbeiten"):
-                        st.session_state.edit_eintrag_id = e["id"]
-                        st.rerun()
-                    if c5.button("X", key=f"del_{e['id']}", help="Löschen"):
-                        db.zeiteintrag_loeschen(e["id"])
-                        st.rerun()
+                _eintrag_karte(e)
         else:
             st.info("Noch keine Einträge heute.")
 
-        # --- Bearbeiten-Dialog für einen heutigen Eintrag ---
-        if st.session_state.edit_eintrag_id is not None:
-            _e = next((x for x in eintraege
-                       if x["id"] == st.session_state.edit_eintrag_id), None)
-            if _e is None:
-                st.session_state.edit_eintrag_id = None
-            else:
-                @st.dialog("Eintrag bearbeiten")
-                def edit_dialog(eintrag):
-                    st.write(f"**Projekt:** {eintrag['projekt_name']}" +
-                             (f" › {eintrag['unterthema_name']}"
-                              if eintrag.get("unterthema_name") else ""))
-                    dauer = st.number_input("Dauer (Stunden)", min_value=0.0,
-                                            max_value=24.0, value=float(eintrag["stunden"]),
-                                            step=0.25)
-                    kat_wert = eintrag.get("kategorie", "Produktiv")
-                    kat = st.selectbox("Kategorie", db.KATEGORIEN,
-                                       index=db.KATEGORIEN.index(kat_wert)
-                                       if kat_wert in db.KATEGORIEN else 0)
-                    kommentar = st.text_area("Beschreibung",
-                                             value=eintrag.get("beschreibung", "") or "",
-                                             height=80)
-                    c1, c2 = st.columns(2)
-                    if c1.button("Speichern", type="primary", use_container_width=True):
-                        db.zeiteintrag_aktualisieren(eintrag["id"],
-                                                     stunden=round(dauer, 2),
-                                                     kategorie=kat,
-                                                     beschreibung=kommentar)
-                        st.session_state.edit_eintrag_id = None
-                        st.rerun()
-                    if c2.button("Abbrechen", use_container_width=True):
-                        st.session_state.edit_eintrag_id = None
-                        st.rerun()
-                edit_dialog(_e)
+        # --- Vergangene Einträge (chronologisch, neueste oben) ---
+        st.divider()
+        st.subheader("Vergangene Einträge")
+        hist_von, hist_bis = zeitraum_waehlen("hist", default_preset="Dieser Monat")
+
+        alle_projekte = db.projekte_laden(nur_aktive=False)
+        hist_projekt_optionen = {"Alle Projekte": None}
+        hist_projekt_optionen.update({p["name"]: p["id"] for p in alle_projekte})
+        hist_projekt_name = st.selectbox("Projekt filtern",
+                                         list(hist_projekt_optionen.keys()),
+                                         key="hist_projekt")
+        hist_projekt_id = hist_projekt_optionen[hist_projekt_name]
+
+        # Heutiger Tag ist oben schon gelistet — Historie endet gestern.
+        gestern = date.today() - timedelta(days=1)
+        hist_bis_effektiv = min(hist_bis, gestern)
+
+        if hist_von > hist_bis_effektiv:
+            historie = []
+        else:
+            historie = db.zeiteintraege_laden(datum_von=hist_von.isoformat(),
+                                              datum_bis=hist_bis_effektiv.isoformat(),
+                                              projekt_id=hist_projekt_id)
+
+        if historie:
+            WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+            # Nach Datum gruppieren — Query liefert bereits datum DESC.
+            tage = {}
+            for e in historie:
+                tage.setdefault(e["datum"], []).append(e)
+            for tag, tag_eintraege in tage.items():
+                tag_datum = date.fromisoformat(tag)
+                tag_summe = sum(e["stunden"] for e in tag_eintraege)
+                label = (f"{WOCHENTAGE[tag_datum.weekday()]} "
+                         f"{tag_datum.strftime('%d.%m.%Y')} — {tag_summe:.2f}h")
+                with st.expander(label):
+                    for e in tag_eintraege:
+                        _eintrag_karte(e)
+        else:
+            st.caption("Keine Einträge im gewählten Zeitraum.")
+
+        # --- Bearbeiten-Dialog (heutige + vergangene Einträge) ---
+        if st.session_state.edit_eintrag is not None:
+            @st.dialog("Eintrag bearbeiten")
+            def edit_dialog(eintrag):
+                from datetime import datetime as dt, time as dtime
+                st.write(f"**Projekt:** {eintrag['projekt_name']}" +
+                         (f" › {eintrag['unterthema_name']}"
+                          if eintrag.get("unterthema_name") else ""))
+
+                e_datum = st.date_input("Datum",
+                                        value=date.fromisoformat(eintrag["datum"]))
+
+                # Startzeit: aus DB falls vorhanden (Timer-Eintrag), sonst 08:00.
+                if eintrag.get("startzeit"):
+                    start_default = dt.fromisoformat(eintrag["startzeit"]).time()
+                else:
+                    start_default = dtime(8, 0)
+                # Endzeit-Default = Start + bisherige Dauer
+                _start_dt = dt.combine(e_datum, start_default)
+                _ende_dt = _start_dt + timedelta(hours=float(eintrag["stunden"]))
+
+                cs, ce = st.columns(2)
+                start_uhr = cs.time_input("Start", value=start_default, step=300)
+                ende_uhr = ce.time_input("Ende", value=_ende_dt.time(), step=300)
+
+                start_dt = dt.combine(e_datum, start_uhr)
+                ende_dt = dt.combine(e_datum, ende_uhr)
+                if ende_dt < start_dt:
+                    # Über-Mitternacht-Fall
+                    ende_dt += timedelta(days=1)
+
+                diff_sek = int((ende_dt - start_dt).total_seconds())
+                stunden_dezimal = round(diff_sek / 3600, 2)
+                h, m = divmod(diff_sek // 60, 60)
+                st.caption(f"{start_dt.strftime('%H:%M')} → {ende_dt.strftime('%H:%M')} "
+                           f"= {h}h {m}min ({stunden_dezimal}h)")
+
+                # key enthält Start+Ende: Feld folgt den Uhrzeiten,
+                # manuelles Umtippen gewinnt (wie im Stopp-Dialog).
+                dauer = st.number_input("Dauer (Stunden)", min_value=0.0,
+                                        max_value=24.0, value=stunden_dezimal,
+                                        step=0.25,
+                                        key=f"edit_dauer_{start_uhr}_{ende_uhr}",
+                                        help="Folgt Start/Ende — hier nur ändern, "
+                                             "wenn du die Dauer direkt setzen willst.")
+                kat_wert = eintrag.get("kategorie", "Produktiv")
+                kat = st.selectbox("Kategorie", db.KATEGORIEN,
+                                   index=db.KATEGORIEN.index(kat_wert)
+                                   if kat_wert in db.KATEGORIEN else 0)
+                kommentar = st.text_area("Beschreibung",
+                                         value=eintrag.get("beschreibung", "") or "",
+                                         height=80)
+                c1, c2 = st.columns(2)
+                if c1.button("Speichern", type="primary", use_container_width=True):
+                    db.zeiteintrag_aktualisieren(eintrag["id"],
+                                                 datum=e_datum.isoformat(),
+                                                 startzeit=start_dt.isoformat(),
+                                                 stunden=round(dauer, 2),
+                                                 kategorie=kat,
+                                                 beschreibung=kommentar)
+                    st.session_state.edit_eintrag = None
+                    st.rerun()
+                if c2.button("Abbrechen", use_container_width=True):
+                    st.session_state.edit_eintrag = None
+                    st.rerun()
+            edit_dialog(st.session_state.edit_eintrag)
 
         st.divider()
         st.subheader("Letzte 7 Tage")
