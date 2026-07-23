@@ -34,3 +34,4 @@ backups/
 
 # Overlay-Position (persistiert Drag & Drop, lokal)
 .overlay_pos.json
+graphify-out/
