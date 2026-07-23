@@ -35,3 +35,12 @@ backups/
 # Overlay-Position (persistiert Drag & Drop, lokal)
 .overlay_pos.json
 graphify-out/
+
+# Handoff-Dokumente (Session-Notizen, lokal)
+*_handoff.md
+
+# Persoenliche/lokale Dateien
+Bewerbungsordner/
+image0.png
+skills-lock.json
+.agents/

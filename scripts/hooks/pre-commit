@@ -1,0 +1,31 @@
+#!/bin/sh
+# Pre-Commit-Hook: Changelog-Pflicht.
+# Blockiert Commits, die Code/Doku ändern, ohne dass CHANGELOG.md mitgeht.
+# Reine Meta-Commits (nur .gitignore, CLAUDE.md, .claude/, docs/agents/ etc.)
+# sind ausgenommen.
+
+staged=$(git diff --cached --name-only)
+
+# Nichts gestaged? (sollte nicht vorkommen) — durchlassen
+[ -z "$staged" ] && exit 0
+
+# Ist CHANGELOG.md dabei? Dann ist alles gut.
+echo "$staged" | grep -q "^CHANGELOG\.md$" && exit 0
+
+# Prüfen, ob relevante Dateien dabei sind (Code, Tests, Requirements).
+relevant=$(echo "$staged" | grep -E '\.(py|toml|txt|html|css|js)$|^requirements')
+
+if [ -n "$relevant" ]; then
+    echo ""
+    echo "COMMIT BLOCKIERT: CHANGELOG.md fehlt."
+    echo ""
+    echo "Diese Aenderungen brauchen einen Changelog-Eintrag:"
+    echo "$relevant" | sed 's/^/  - /'
+    echo ""
+    echo "Bitte CHANGELOG.md ergaenzen (Abschnitt [Unreleased] oder neue Version)"
+    echo "und mit 'git add CHANGELOG.md' stagen."
+    echo ""
+    exit 1
+fi
+
+exit 0

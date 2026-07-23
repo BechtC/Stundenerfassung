@@ -25,6 +25,10 @@ python testdaten.py
 - **database.py** — SQLite-Backend (`stundenerfassung.db`). Alle DB-Zugriffe laufen ueber `get_connection()` Context Manager. 5 Tabellen: `projekte`, `unterthemen`, `zeiteintraege`, `rechnungen`, `firmen_daten`.
 - **rechnung_pdf.py** — PDF-Generierung mit reportlab. Erzeugt A4-Rechnungen in `rechnungen/`. Betraege in deutschem Format (Punkt als Tausender, Komma als Dezimal).
 
+## Changelog-Pflicht
+
+Jeder Commit mit Code-Aenderungen (.py, .toml, .txt, .html, .css, .js, requirements*) MUSS einen aktualisierten `CHANGELOG.md`-Eintrag enthalten (Abschnitt `[Unreleased]` oder neue Version). Ein Pre-Commit-Hook (`scripts/hooks/pre-commit`, aktiv in `.git/hooks/`) blockiert Commits ohne. Nach frischem Clone aktivieren mit: `cp scripts/hooks/pre-commit .git/hooks/pre-commit`
+
 ## Key Details
 
 - Port **8502** (8501 ist belegt durch Trading Risk App)
