@@ -67,15 +67,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
-st.markdown("""
-<style>
-    .stMetric { background: #f8f9fa; padding: 15px; border-radius: 8px; }
-    div[data-testid="stSidebar"] { background: #1a1a2e; }
-    div[data-testid="stSidebar"] .stMarkdown { color: #e0e0e0; }
-    .block-container { padding-top: 2rem; }
-</style>
-""", unsafe_allow_html=True)
+# Theme + MagicBento-Effekte (Dark Theme, Glow, Spotlight, Tilt)
+from theme import inject_theme
+inject_theme()
 
 # --- Sidebar Navigation ---
 st.sidebar.title("Stundenerfassung")
