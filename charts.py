@@ -7,7 +7,24 @@ from datetime import date, timedelta
 
 import plotly.graph_objects as go
 
+import theme
+
 FALLBACK_FARBE = "#AAAAAA"
+
+
+def _layout(fig, **kwargs):
+    """Einheitliches Dark-Layout passend zum Bento-Theme."""
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": theme.TEXT},
+        margin=dict(t=10, b=10),
+        **kwargs,
+    )
+    fig.update_xaxes(gridcolor=theme.CARD_BORDER, zerolinecolor=theme.CARD_BORDER)
+    fig.update_yaxes(gridcolor=theme.CARD_BORDER, zerolinecolor=theme.CARD_BORDER)
+    return fig
 
 
 def tage_auffuellen(tage_stats, von, bis):
@@ -31,8 +48,7 @@ def bar_projekte(stats_projekt, farben_map):
         x=namen, y=stunden, marker={"color": farben},
         hovertemplate="%{x}: %{y:.2f}h<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden")
-    return fig
+    return _layout(fig, yaxis_title="Stunden")
 
 
 def bar_kategorien(stats_kat):
@@ -40,11 +56,10 @@ def bar_kategorien(stats_kat):
     fig = go.Figure(go.Bar(
         x=[s["kategorie"] for s in stats_kat],
         y=[s["gesamt_stunden"] for s in stats_kat],
-        marker={"color": "#457B9D"},
+        marker={"color": theme.SECONDARY},
         hovertemplate="%{x}: %{y:.2f}h<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden")
-    return fig
+    return _layout(fig, yaxis_title="Stunden")
 
 
 def donut_projekte(summen):
@@ -56,8 +71,7 @@ def donut_projekte(summen):
         hole=0.45,
         hovertemplate="%{label}: %{value:.2f}h (%{percent})<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10))
-    return fig
+    return _layout(fig)
 
 
 def bar_wochentage(daten):
@@ -66,11 +80,10 @@ def bar_wochentage(daten):
         x=[d["wochentag"] for d in daten],
         y=[d["schnitt"] for d in daten],
         customdata=[[d["summe"]] for d in daten],
-        marker={"color": "#2A9D8F"},
+        marker={"color": theme.ACCENT},
         hovertemplate="%{x}: Ø %{y:.2f}h (Summe %{customdata[0]:.1f}h)<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Ø Stunden")
-    return fig
+    return _layout(fig, yaxis_title="Ø Stunden")
 
 
 def bar_tageszeit(verteilung):
@@ -78,11 +91,10 @@ def bar_tageszeit(verteilung):
     fig = go.Figure(go.Bar(
         x=[f"{h} Uhr" for h in range(24)],
         y=verteilung,
-        marker={"color": "#8338EC"},
+        marker={"color": theme.ACCENT_LIGHT},
         hovertemplate="%{x}: %{y:.2f}h<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden")
-    return fig
+    return _layout(fig, yaxis_title="Stunden")
 
 
 def trend_wochen(trend):
@@ -91,18 +103,17 @@ def trend_wochen(trend):
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=wochen, y=[t["summe"] for t in trend],
-        name="Wochenstunden", marker={"color": "#A8DADC"},
+        name="Wochenstunden", marker={"color": theme.ACCENT_DIM},
         hovertemplate="%{x}: %{y:.1f}h<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
         x=wochen, y=[t["schnitt4"] for t in trend],
         name="4-Wochen-Schnitt", mode="lines",
-        line={"color": "#E63946", "width": 2},
+        line={"color": theme.CONTRAST, "width": 2},
         hovertemplate="%{x}: Ø %{y:.1f}h<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden",
-                      legend={"orientation": "h", "y": 1.1})
-    return fig
+    return _layout(fig, yaxis_title="Stunden",
+                   legend={"orientation": "h", "y": 1.1})
 
 
 MONATS_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
@@ -115,7 +126,7 @@ def heatmap_jahr(matrix, jahr):
         z=matrix["z"],
         text=matrix["text"],
         y=["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
-        colorscale=[[0, "#EBEDF0"], [1, "#216E39"]],
+        colorscale=[[0, "#141b20"], [1, theme.ACCENT]],
         xgap=2, ygap=2,
         hovertemplate="%{text}: %{z:.2f}h<extra></extra>",
         hoverongaps=False,
@@ -125,13 +136,12 @@ def heatmap_jahr(matrix, jahr):
     start = date(jahr, 1, 1)
     offset = start.weekday()
     tick_pos = [(offset + (date(jahr, m, 1) - start).days) // 7 for m in range(1, 13)]
-    fig.update_layout(
+    return _layout(
+        fig,
         xaxis={"tickvals": tick_pos, "ticktext": MONATS_LABELS, "showgrid": False},
         yaxis={"autorange": "reversed", "showgrid": False},
-        margin=dict(t=10, b=10),
         height=220,
     )
-    return fig
 
 
 def linie_tagesverlauf(tage_stats, von=None, bis=None):
@@ -146,8 +156,7 @@ def linie_tagesverlauf(tage_stats, von=None, bis=None):
     fig = go.Figure(go.Scatter(
         x=[t["datum"] for t in reihe],
         y=[t["gesamt_stunden"] for t in reihe],
-        mode="lines+markers", line={"color": "#2A9D8F"},
+        mode="lines+markers", line={"color": theme.ACCENT},
         hovertemplate="%{x}: %{y:.2f}h<extra></extra>",
     ))
-    fig.update_layout(margin=dict(t=10, b=10), yaxis_title="Stunden")
-    return fig
+    return _layout(fig, yaxis_title="Stunden")
