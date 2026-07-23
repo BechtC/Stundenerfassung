@@ -44,7 +44,7 @@ _CSS = f"""
     .block-container {{ padding-top: 2rem; }}
 
     /* --- Sidebar --- */
-    div[data-testid="stSidebar"] {{
+    [data-testid="stSidebar"] {{
         background: {BG_SIDEBAR};
         border-right: 1px solid {CARD_BORDER};
     }}
@@ -108,12 +108,12 @@ _CSS = f"""
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {{ color: {TEXT}; }}
 
     /* --- Buttons --- */
-    div.stButton > button, div[data-testid="stSidebar"] button {{
+    div.stButton > button, [data-testid="stSidebar"] button {{
         border-radius: 12px;
         transition: transform 0.15s ease, box-shadow 0.2s ease,
                     border-color 0.2s ease;
     }}
-    div.stButton > button:hover, div[data-testid="stSidebar"] button:hover {{
+    div.stButton > button:hover, [data-testid="stSidebar"] button:hover {{
         border-color: {ACCENT};
         box-shadow: 0 0 14px rgba(var(--glow-rgb), 0.35);
         transform: translateY(-1px);
